@@ -28,6 +28,7 @@ class OrganizationSettingsController extends Controller
                 'name' => $current_team->name,
                 'slug' => $current_team->slug,
             ],
+            'logoUrl' => $settings->logo_path ? route('portal.logo', ['organization' => $current_team->slug]).'?v='.$settings->updated_at?->timestamp : null,
             'settings' => [
                 'legal_name' => $settings->legal_name,
                 'contact_email' => $settings->contact_email,
@@ -46,6 +47,8 @@ class OrganizationSettingsController extends Controller
                 'brand_secondary_color' => $settings->brand_secondary_color,
                 'ai_processing_enabled' => $settings->ai_processing_enabled,
                 'ai_provider' => $settings->ai_provider,
+                'assistant_enabled' => (bool) $settings->assistant_enabled,
+                'assistant_name' => $settings->assistant_name ?: 'Nora',
             ],
             'permissions' => [
                 'canManageOrganizationSettings' => $request->user()->can('manageSettings', $current_team),

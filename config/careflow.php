@@ -73,7 +73,6 @@ return [
     |
     | Supported providers:
     | - openai: Laravel AI SDK agents via OpenAI (requires OPENAI_API_KEY)
-    | - mock: deterministic adapters for automated tests only (phpunit.xml)
     |
     | Do not send real patient documents to OpenAI without approved safeguards.
     |
@@ -104,7 +103,7 @@ return [
     */
 
     'his' => [
-        'provider' => env('CAREFLOW_HIS_PROVIDER', 'mock'),
+        'provider' => env('CAREFLOW_HIS_PROVIDER', 'manual'),
     ],
 
     /*
@@ -117,6 +116,42 @@ return [
     | to enter an organization user's interface for support/testing.
     |
     */
+
+    /*
+    |--------------------------------------------------------------------------
+    | Public registration
+    |--------------------------------------------------------------------------
+    |
+    | Set CAREFLOW_ALLOW_REGISTRATION=false in production so only people holding
+    | a pending staff invitation can create an account.
+    |
+    */
+
+    /*
+    |--------------------------------------------------------------------------
+    | Mandatory two-factor authentication
+    |--------------------------------------------------------------------------
+    |
+    | When true, every signed-in user must turn on two-factor authentication
+    | before using any organization page. Recommended for real patient data.
+    |
+    */
+
+    /*
+    |--------------------------------------------------------------------------
+    | Public contact
+    |--------------------------------------------------------------------------
+    |
+    | Email address behind the "Request a pilot conversation" buttons on the
+    | public landing page.
+    |
+    */
+
+    'contact_email' => env('CAREFLOW_CONTACT_EMAIL', env('MAIL_FROM_ADDRESS')),
+
+    'require_two_factor' => (bool) env('CAREFLOW_REQUIRE_2FA', false),
+
+    'allow_registration' => (bool) env('CAREFLOW_ALLOW_REGISTRATION', true),
 
     'admin_emails' => array_values(array_filter(array_map(
         static fn (string $email): string => strtolower(trim($email)),

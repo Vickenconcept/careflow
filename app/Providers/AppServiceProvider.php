@@ -10,12 +10,6 @@ use App\Contracts\Documents\DocumentTextExtractor;
 use App\Contracts\Documents\DocumentTranslator;
 use App\Contracts\Documents\MedicalInformationExtractor;
 use App\Domains\Communications\Providers\LogOutboundCommunicationSender;
-use App\Domains\Documents\Providers\Mock\MockDocumentClassifier;
-use App\Domains\Documents\Providers\Mock\MockDocumentLanguageDetector;
-use App\Domains\Documents\Providers\Mock\MockDocumentSummarizer;
-use App\Domains\Documents\Providers\Mock\MockDocumentTextExtractor;
-use App\Domains\Documents\Providers\Mock\MockDocumentTranslator;
-use App\Domains\Documents\Providers\Mock\MockMedicalInformationExtractor;
 use App\Domains\Documents\Providers\OpenAi\OpenAiDocumentClassifier;
 use App\Domains\Documents\Providers\OpenAi\OpenAiDocumentLanguageDetector;
 use App\Domains\Documents\Providers\OpenAi\OpenAiDocumentSummarizer;
@@ -23,16 +17,20 @@ use App\Domains\Documents\Providers\OpenAi\OpenAiDocumentTextExtractor;
 use App\Domains\Documents\Providers\OpenAi\OpenAiDocumentTranslator;
 use App\Domains\Documents\Providers\OpenAi\OpenAiMedicalInformationExtractor;
 use App\Domains\Integrations\His\Contracts\HisSchedulingAdapter;
-use App\Domains\Integrations\His\Providers\MockHisSchedulingAdapter;
+use App\Domains\Integrations\His\Providers\ManualHisReferenceAdapter;
+use App\Support\Storage\CloudinaryAdapter;
 use Carbon\CarbonImmutable;
 use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rules\Password;
+use League\Flysystem\Filesystem;
 use RuntimeException;
 
 class AppServiceProvider extends ServiceProvider
@@ -54,6 +52,16 @@ class AppServiceProvider extends ServiceProvider
     {
         $this->configureDefaults();
         $this->configureRateLimiting();
+
+        Storage::extend('cloudinary', function ($app, array $config) {
+            $adapter = new CloudinaryAdapter(
+                (string) ($config['cloud_name'] ?? ''),
+                (string) ($config['api_key'] ?? ''),
+                (string) ($config['api_secret'] ?? ''),
+            );
+
+            return new FilesystemAdapter(new Filesystem($adapter, $config), $adapter, $config);
+        });
     }
 
     /**
@@ -90,52 +98,18 @@ class AppServiceProvider extends ServiceProvider
         });
     }
 
+    /**
+     * Document AI always runs on the live provider. Automated tests swap in
+     * deterministic doubles from tests/Support; none ship with the application.
+     */
     protected function registerDocumentAiProviders(): void
     {
-        $this->app->bind(DocumentTextExtractor::class, fn () => $this->resolveDocumentAiProvider(
-            mock: MockDocumentTextExtractor::class,
-            openai: OpenAiDocumentTextExtractor::class,
-        ));
-        $this->app->bind(DocumentLanguageDetector::class, fn () => $this->resolveDocumentAiProvider(
-            mock: MockDocumentLanguageDetector::class,
-            openai: OpenAiDocumentLanguageDetector::class,
-        ));
-        $this->app->bind(DocumentClassifier::class, fn () => $this->resolveDocumentAiProvider(
-            mock: MockDocumentClassifier::class,
-            openai: OpenAiDocumentClassifier::class,
-        ));
-        $this->app->bind(MedicalInformationExtractor::class, fn () => $this->resolveDocumentAiProvider(
-            mock: MockMedicalInformationExtractor::class,
-            openai: OpenAiMedicalInformationExtractor::class,
-        ));
-        $this->app->bind(DocumentTranslator::class, fn () => $this->resolveDocumentAiProvider(
-            mock: MockDocumentTranslator::class,
-            openai: OpenAiDocumentTranslator::class,
-        ));
-        $this->app->bind(DocumentSummarizer::class, fn () => $this->resolveDocumentAiProvider(
-            mock: MockDocumentSummarizer::class,
-            openai: OpenAiDocumentSummarizer::class,
-        ));
-    }
-
-    /**
-     * @template T of object
-     *
-     * @param  class-string<T>  $mock
-     * @param  class-string<T>  $openai
-     * @return T
-     */
-    protected function resolveDocumentAiProvider(string $mock, string $openai): object
-    {
-        $provider = strtolower((string) config('careflow.ai.provider', 'openai'));
-
-        return match ($provider) {
-            'mock' => $this->app->make($mock),
-            'openai' => $this->resolveOpenAiProvider($openai),
-            default => throw new RuntimeException(
-                "Unsupported CareFlow AI provider [{$provider}]. Supported: openai (live), mock (tests).",
-            ),
-        };
+        $this->app->bind(DocumentTextExtractor::class, fn () => $this->resolveOpenAiProvider(OpenAiDocumentTextExtractor::class));
+        $this->app->bind(DocumentLanguageDetector::class, fn () => $this->resolveOpenAiProvider(OpenAiDocumentLanguageDetector::class));
+        $this->app->bind(DocumentClassifier::class, fn () => $this->resolveOpenAiProvider(OpenAiDocumentClassifier::class));
+        $this->app->bind(MedicalInformationExtractor::class, fn () => $this->resolveOpenAiProvider(OpenAiMedicalInformationExtractor::class));
+        $this->app->bind(DocumentTranslator::class, fn () => $this->resolveOpenAiProvider(OpenAiDocumentTranslator::class));
+        $this->app->bind(DocumentSummarizer::class, fn () => $this->resolveOpenAiProvider(OpenAiDocumentSummarizer::class));
     }
 
     /**
@@ -149,9 +123,7 @@ class AppServiceProvider extends ServiceProvider
         $key = (string) config('ai.providers.openai.key', '');
 
         if ($key === '') {
-            throw new RuntimeException(
-                'CAREFLOW_AI_PROVIDER is openai but OPENAI_API_KEY is empty. Set OPENAI_API_KEY in your .env.',
-            );
+            throw new RuntimeException('OPENAI_API_KEY is empty. Set it in your .env and restart the queue worker.');
         }
 
         return $this->app->make($openaiClass);
@@ -171,17 +143,12 @@ class AppServiceProvider extends ServiceProvider
         });
     }
 
+    /**
+     * No hospital information system is connected yet: staff type the booking
+     * reference from the hospital's own system and it is stored as entered.
+     */
     protected function registerHisProviders(): void
     {
-        $this->app->bind(HisSchedulingAdapter::class, function () {
-            $provider = strtolower((string) config('careflow.his.provider', 'mock'));
-
-            return match ($provider) {
-                'mock' => $this->app->make(MockHisSchedulingAdapter::class),
-                default => throw new RuntimeException(
-                    "Unsupported CareFlow HIS provider [{$provider}]. Supported: mock.",
-                ),
-            };
-        });
+        $this->app->bind(HisSchedulingAdapter::class, fn () => $this->app->make(ManualHisReferenceAdapter::class));
     }
 }

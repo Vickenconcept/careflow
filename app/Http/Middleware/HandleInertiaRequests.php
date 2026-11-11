@@ -2,6 +2,8 @@
 
 namespace App\Http\Middleware;
 
+use App\Enums\CaseTaskStatus;
+use App\Models\CaseTask;
 use App\Support\Impersonation;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
@@ -55,6 +57,21 @@ class HandleInertiaRequests extends Middleware
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
             'currentTeam' => fn () => $user?->currentTeam ? $user->toUserTeam($user->currentTeam) : null,
             'teams' => fn () => $user?->toUserTeams(includeCurrent: true) ?? [],
+            'assistant' => function () use ($user) {
+                $settings = $user?->currentTeam?->organizationSetting;
+
+                return [
+                    'enabled' => (bool) ($settings?->assistant_enabled ?? false),
+                    'name' => $settings?->assistant_name ?: 'Nora',
+                ];
+            },
+            'pendingWorkCount' => fn () => $user?->currentTeam
+                ? CaseTask::query()
+                    ->where('team_id', $user->current_team_id)
+                    ->where('assigned_user_id', $user->id)
+                    ->whereIn('status', [CaseTaskStatus::Open, CaseTaskStatus::InProgress])
+                    ->count()
+                : 0,
         ];
     }
 }

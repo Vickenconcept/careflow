@@ -16,6 +16,8 @@ import {
     Save,
     ShieldAlert,
     Sparkles,
+    ZoomIn,
+    ZoomOut,
 } from 'lucide-react';
 import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import Heading from '@/components/heading';
@@ -56,6 +58,14 @@ type Props = {
         status_update_url: string;
     };
     availableStatusTransitions: StatusOption[];
+    navigation: {
+        position: number;
+        total: number;
+        pending: number;
+        prev_url: string | null;
+        next_url: string | null;
+        next_pending_url: string | null;
+    };
     document: {
         uuid: string;
         original_filename: string;
@@ -73,6 +83,7 @@ type Props = {
         download_url: string;
         reprocess_url: string;
         review_update_url: string;
+        review_confirm_url: string;
         is_image: boolean;
         is_pdf: boolean;
     };
@@ -97,6 +108,9 @@ type Props = {
             disclaimer: string;
             is_synthetic: boolean;
             provider: string;
+            signed_off: boolean;
+            signed_off_by: string | null;
+            sign_off_url: string;
         } | null;
         summary: {
             version: number;
@@ -126,10 +140,15 @@ export default function DocumentComparison({
     team,
     case: patientCase,
     availableStatusTransitions,
+    navigation,
     document,
     ai,
     permissions,
 }: Props) {
+    const confirmForm = useForm({});
+    const signOffForm = useForm({});
+    const [zoom, setZoom] = useState(100);
+    const [pdfPage, setPdfPage] = useState(1);
     const form = useForm({
         corrected_payload: ai.extraction?.payload ?? {},
         corrected_sections: ai.summary?.sections ?? {},
@@ -160,6 +179,16 @@ export default function DocumentComparison({
             ai.extraction ||
             ai.summary,
     );
+
+    const reviewStatuses = [
+        ai.extraction?.review_status,
+        ai.summary?.review_status,
+    ].filter((value): value is string => Boolean(value));
+    const isReviewed =
+        reviewStatuses.length > 0 &&
+        reviewStatuses.every((value) => value !== 'unreviewed');
+    const canConfirmReview =
+        permissions.canReviewAi && reviewStatuses.length > 0 && !isReviewed;
 
     const { start, stop } = usePoll(
         2500,
@@ -221,7 +250,7 @@ export default function DocumentComparison({
                             className="rounded-full"
                         >
                             <Link
-                                href={`/${team.slug}/cases/${patientCase.reference}`}
+                                href={`/${team.slug}/cases/${patientCase.reference}?tab=documents`}
                             >
                                 <ArrowLeft className="size-4" />
                                 Back to case
@@ -323,6 +352,101 @@ export default function DocumentComparison({
                             content. Review every draft before acting on it.
                         </p>
                     </div>
+                </div>
+
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200/80 bg-white px-4 py-3">
+                    <div className="flex flex-wrap items-center gap-3 text-sm">
+                        <div className="flex items-center gap-1">
+                            {navigation.prev_url ? (
+                                <Button
+                                    asChild
+                                    variant="outline"
+                                    size="sm"
+                                    className="rounded-full"
+                                >
+                                    <Link href={navigation.prev_url}>
+                                        <ArrowLeft className="size-4" />
+                                        Previous
+                                    </Link>
+                                </Button>
+                            ) : null}
+                            {navigation.next_url ? (
+                                <Button
+                                    asChild
+                                    variant="outline"
+                                    size="sm"
+                                    className="rounded-full"
+                                >
+                                    <Link href={navigation.next_url}>
+                                        Next
+                                        <ArrowRight className="size-4" />
+                                    </Link>
+                                </Button>
+                            ) : null}
+                        </div>
+                        <span className="text-slate-600">
+                            Document {navigation.position} of {navigation.total}
+                            {navigation.pending > 0
+                                ? ` · ${navigation.pending} awaiting review`
+                                : ' · all reviewed'}
+                        </span>
+                        {reviewStatuses.length > 0 ? (
+                            isReviewed ? (
+                                <Badge className="rounded-full border border-emerald-200 bg-emerald-50 text-emerald-700">
+                                    <CheckCircle2 className="size-3.5" />
+                                    <span className="ms-1">
+                                        Reviewed by staff
+                                    </span>
+                                </Badge>
+                            ) : (
+                                <Badge className="rounded-full border border-amber-200 bg-amber-50 text-amber-800">
+                                    <AlertTriangle className="size-3.5" />
+                                    <span className="ms-1">
+                                        Unreviewed AI draft
+                                    </span>
+                                </Badge>
+                            )
+                        ) : null}
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                        {canConfirmReview ? (
+                            <Button
+                                type="button"
+                                className="rounded-full bg-brand text-white hover:bg-brand/90"
+                                disabled={confirmForm.processing}
+                                onClick={() =>
+                                    confirmForm.post(
+                                        document.review_confirm_url,
+                                    )
+                                }
+                            >
+                                <CheckCircle2 className="size-4" />
+                                {navigation.pending > 1
+                                    ? 'Mark reviewed & next'
+                                    : 'Mark reviewed'}
+                            </Button>
+                        ) : null}
+                        {isReviewed && navigation.next_pending_url ? (
+                            <Button
+                                asChild
+                                className="rounded-full bg-brand text-white hover:bg-brand/90"
+                            >
+                                <Link href={navigation.next_pending_url}>
+                                    Next document to review
+                                    <ArrowRight className="size-4" />
+                                </Link>
+                            </Button>
+                        ) : null}
+                    </div>
+                    {canConfirmReview ? (
+                        <p className="w-full text-xs text-slate-500">
+                            “Mark reviewed” records that you checked this AI
+                            draft. It does not approve any clinical content.
+                            Use “Save corrections” below if something needs
+                            fixing first.
+                        </p>
+                    ) : null}
                 </div>
 
                 {isProcessing ? (
@@ -516,19 +640,100 @@ export default function DocumentComparison({
                             </div>
                         </div>
                         <div className="flex min-h-0 flex-1 flex-col bg-slate-50/80 p-4">
+                            {document.is_image || document.is_pdf ? (
+                                <div
+                                    className="mb-2 flex shrink-0 items-center gap-1.5 text-xs text-slate-600"
+                                    role="toolbar"
+                                    aria-label="Document viewer controls"
+                                >
+                                    <Button
+                                        type="button"
+                                        size="icon"
+                                        variant="outline"
+                                        className="size-8 rounded-full"
+                                        aria-label="Zoom out"
+                                        disabled={zoom <= 50}
+                                        onClick={() =>
+                                            setZoom((value) => Math.max(50, value - 25))
+                                        }
+                                    >
+                                        <ZoomOut className="size-4" />
+                                    </Button>
+                                    <span className="w-12 text-center font-medium tabular-nums">
+                                        {zoom}%
+                                    </span>
+                                    <Button
+                                        type="button"
+                                        size="icon"
+                                        variant="outline"
+                                        className="size-8 rounded-full"
+                                        aria-label="Zoom in"
+                                        disabled={zoom >= 300}
+                                        onClick={() =>
+                                            setZoom((value) => Math.min(300, value + 25))
+                                        }
+                                    >
+                                        <ZoomIn className="size-4" />
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="ghost"
+                                        className="h-8 rounded-full"
+                                        onClick={() => setZoom(100)}
+                                    >
+                                        Reset
+                                    </Button>
+                                    {document.is_pdf ? (
+                                        <span className="ml-auto flex items-center gap-1.5">
+                                            <Button
+                                                type="button"
+                                                size="icon"
+                                                variant="outline"
+                                                className="size-8 rounded-full"
+                                                aria-label="Previous page"
+                                                disabled={pdfPage <= 1}
+                                                onClick={() =>
+                                                    setPdfPage((value) => Math.max(1, value - 1))
+                                                }
+                                            >
+                                                <ArrowLeft className="size-4" />
+                                            </Button>
+                                            <span className="w-14 text-center font-medium tabular-nums">
+                                                Page {pdfPage}
+                                            </span>
+                                            <Button
+                                                type="button"
+                                                size="icon"
+                                                variant="outline"
+                                                className="size-8 rounded-full"
+                                                aria-label="Next page"
+                                                onClick={() => setPdfPage((value) => value + 1)}
+                                            >
+                                                <ArrowRight className="size-4" />
+                                            </Button>
+                                        </span>
+                                    ) : null}
+                                </div>
+                            ) : null}
                             <div className="min-h-0 flex-1 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_4px_12px_rgba(15,23,42,0.04)]">
                                 {document.is_image ? (
-                                    <div className="flex h-full items-center justify-center overflow-auto p-3">
+                                    <div className="flex h-full items-start justify-center overflow-auto p-3">
                                         <img
                                             src={document.preview_url}
                                             alt={document.original_filename}
-                                            className="max-h-full max-w-full object-contain"
+                                            style={{
+                                                width: `${zoom}%`,
+                                                maxWidth: zoom > 100 ? 'none' : '100%',
+                                            }}
+                                            className="object-contain"
                                         />
                                     </div>
                                 ) : document.is_pdf ? (
                                     <iframe
+                                        key={`${pdfPage}-${zoom}`}
                                         title={document.original_filename}
-                                        src={document.preview_url}
+                                        src={`${document.preview_url}#page=${pdfPage}&zoom=${zoom}`}
                                         className="h-full w-full border-0"
                                     />
                                 ) : (
@@ -555,8 +760,20 @@ export default function DocumentComparison({
                                 <Bot className="size-4" />
                             </span>
                             <div>
-                                <h2 className="text-sm font-semibold text-slate-900">
+                                <h2 className="flex flex-wrap items-center gap-2 text-sm font-semibold text-slate-900">
                                     AI document assist
+                                    <span
+                                        className={cn(
+                                            'rounded-full border px-2 py-0.5 text-[11px] font-semibold uppercase',
+                                            isReviewed
+                                                ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                                                : 'border-amber-200 bg-amber-50 text-amber-800',
+                                        )}
+                                    >
+                                        {isReviewed
+                                            ? 'Reviewed draft'
+                                            : 'AI draft · not approved'}
+                                    </span>
                                 </h2>
                                 <p className="text-xs text-slate-500">
                                     Draft extraction, translation, and summary
@@ -603,6 +820,36 @@ export default function DocumentComparison({
                                         <pre className="max-h-72 overflow-y-auto whitespace-pre-wrap text-sm leading-6 text-slate-700">
                                             {ai.translation.translated_text}
                                         </pre>
+                                        {ai.translation.signed_off ? (
+                                            <p className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">
+                                                <CheckCircle2 className="size-3.5" />
+                                                Signed off
+                                                {ai.translation.signed_off_by
+                                                    ? ` by ${ai.translation.signed_off_by}`
+                                                    : ''}
+                                            </p>
+                                        ) : permissions.canReviewAi ? (
+                                            <Button
+                                                type="button"
+                                                size="sm"
+                                                variant="outline"
+                                                className="mt-3 rounded-full"
+                                                disabled={signOffForm.processing}
+                                                onClick={() =>
+                                                    signOffForm.post(
+                                                        ai.translation!.sign_off_url,
+                                                        { preserveScroll: true },
+                                                    )
+                                                }
+                                            >
+                                                <CheckCircle2 className="size-4" />
+                                                Sign off translation
+                                            </Button>
+                                        ) : (
+                                            <p className="mt-3 text-xs text-amber-700">
+                                                Not yet checked by a person.
+                                            </p>
+                                        )}
                                     </>
                                 ) : null}
                             </AssistPanel>

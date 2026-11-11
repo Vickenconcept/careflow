@@ -3,9 +3,12 @@
 namespace App\Models;
 
 use App\Concerns\BelongsToTeam;
+use App\Enums\ConsentType;
 use App\Enums\DocumentCategory;
 use App\Enums\DocumentProcessingStatus;
+use App\Support\Storage\OrganizationStorage;
 use Database\Factories\PatientDocumentFactory;
+use Illuminate\Contracts\Filesystem\Filesystem;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -86,6 +89,56 @@ class PatientDocument extends Model
     public function currentExtraction(): HasOne
     {
         return $this->hasOne(DocumentExtraction::class)->where('is_current', true);
+    }
+
+    /**
+     * Why AI must not touch this document, or null when processing is permitted.
+     * Requires both the hospital's AI switch and the patient's own AI consent.
+     */
+    public function aiProcessingBlockedReason(): ?string
+    {
+        if ($this->team->organizationSetting?->ai_processing_enabled === false) {
+            return 'AI processing is switched off for this organization. Review the original file manually.';
+        }
+
+        $consented = PatientConsent::query()
+            ->where('patient_id', $this->patient_id)
+            ->where('consent_type', ConsentType::AiProcessing)
+            ->where('accepted', true)
+            ->exists();
+
+        return $consented
+            ? null
+            : 'The patient did not consent to AI processing. Review the original file manually.';
+    }
+
+    /**
+     * The filesystem holding this document: platform storage or the organization's own.
+     */
+    public function filesystem(): Filesystem
+    {
+        return app(OrganizationStorage::class)->filesystemFor($this->team, $this->disk);
+    }
+
+    /**
+     * Run a callback with a temporary local copy of the stored file (for tools that need a path).
+     *
+     * @template T
+     *
+     * @param  callable(string): T  $callback
+     * @return T
+     */
+    public function withLocalCopy(callable $callback): mixed
+    {
+        $temporary = tempnam(sys_get_temp_dir(), 'careflow-doc-');
+
+        try {
+            file_put_contents($temporary, $this->filesystem()->get($this->path));
+
+            return $callback($temporary);
+        } finally {
+            @unlink($temporary);
+        }
     }
 
     /**

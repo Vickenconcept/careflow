@@ -48,19 +48,13 @@ class DepartmentController extends Controller
     }
 
     /**
-     * Show the form for creating a new department.
+     * Departments are added in a dialog on the list page.
      */
-    public function create(Request $request, Team $current_team): Response
+    public function create(Request $request, Team $current_team): RedirectResponse
     {
         Gate::authorize('create', [Department::class, $current_team]);
 
-        return Inertia::render('organizations/departments/create', [
-            'team' => [
-                'id' => $current_team->id,
-                'name' => $current_team->name,
-                'slug' => $current_team->slug,
-            ],
-        ]);
+        return to_route('organizations.departments.index', ['current_team' => $current_team->slug]);
     }
 
     /**
@@ -87,29 +81,14 @@ class DepartmentController extends Controller
     }
 
     /**
-     * Show the form for editing the specified department.
+     * Departments are edited in a dialog on the list page.
      */
-    public function edit(Request $request, Team $current_team, Department $department): Response
+    public function edit(Request $request, Team $current_team, Department $department): RedirectResponse
     {
         $this->ensureDepartmentBelongsToTeam($department, $current_team);
         Gate::authorize('update', $department);
 
-        return Inertia::render('organizations/departments/edit', [
-            'team' => [
-                'id' => $current_team->id,
-                'name' => $current_team->name,
-                'slug' => $current_team->slug,
-            ],
-            'department' => [
-                'id' => $department->id,
-                'name' => $department->name,
-                'slug' => $department->slug,
-                'code' => $department->code,
-                'description' => $department->description,
-                'is_active' => $department->is_active,
-                'sort_order' => $department->sort_order,
-            ],
-        ]);
+        return to_route('organizations.departments.index', ['current_team' => $current_team->slug]);
     }
 
     /**

@@ -6,10 +6,14 @@ import InputError from '@/components/input-error';
 import PasswordInput from '@/components/password-input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
+import TwoFactorSettings from '@/components/two-factor-settings';
 import { edit } from '@/routes/security';
 
 // oxfmt-ignore
 type Props = {
+    canManageTwoFactor?: boolean;
+    twoFactorEnabled?: boolean;
+    twoFactorRequired?: boolean;
     passwordRules: string;
 };
 
@@ -117,6 +121,13 @@ export default function Security(props: Props) {
                         </>
                     )}
                 </Form>
+
+                {props.canManageTwoFactor ? (
+                    <TwoFactorSettings
+                        enabled={props.twoFactorEnabled ?? false}
+                        required={props.twoFactorRequired ?? false}
+                    />
+                ) : null}
             </div>
         </>
     );

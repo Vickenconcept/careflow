@@ -42,8 +42,8 @@ class UpdateOrganizationSettingsRequest extends FormRequest
             'supported_languages.*' => ['string', 'max:10', Rule::in(['en', 'tr', 'ar', 'ru', 'az'])],
             'brand_primary_color' => ['nullable', 'string', 'max:20'],
             'brand_secondary_color' => ['nullable', 'string', 'max:20'],
-            'ai_processing_enabled' => ['required', 'boolean'],
-            'ai_provider' => ['required', 'string', Rule::in(['openai'])],
+            'ai_processing_enabled' => ['sometimes', 'boolean'],
+            'ai_provider' => ['sometimes', 'string', Rule::in(['openai'])],
         ];
     }
 }

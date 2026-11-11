@@ -5,6 +5,7 @@ namespace App\Http\Middleware;
 use App\Enums\TeamRole;
 use App\Models\Team;
 use App\Models\User;
+use App\Support\Impersonation;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -23,6 +24,12 @@ class EnsureTeamMembership
         abort_if(! $user || ! $team || ! $user->belongsToTeam($team), 403);
 
         $this->ensureTeamMemberHasRequiredRole($user, $team, $minimumRole);
+
+        abort_if(
+            $team->organizationSetting?->isSuspended() && ! app(Impersonation::class)->active($request),
+            403,
+            'This organization\'s subscription is suspended. Please contact the platform administrator.',
+        );
 
         if ($request->route('current_team') && ! $user->isCurrentTeam($team)) {
             $user->switchTeam($team);

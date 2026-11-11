@@ -252,6 +252,27 @@ class PatientCase extends Model
     }
 
     /**
+     * References are only unique within an organization, so resolve them inside the
+     * organization named in the URL; never across tenants.
+     */
+    public function resolveRouteBinding($value, $field = null): ?Model
+    {
+        $team = request()->route('current_team');
+        $teamId = $team instanceof Team
+            ? $team->id
+            : (is_string($team) ? Team::query()->where('slug', $team)->value('id') : null);
+
+        if ($teamId === null) {
+            return null;
+        }
+
+        return $this->newQuery()
+            ->where('team_id', $teamId)
+            ->where($field ?? $this->getRouteKeyName(), $value)
+            ->first();
+    }
+
+    /**
      * @return array<string, string>
      */
     protected function casts(): array

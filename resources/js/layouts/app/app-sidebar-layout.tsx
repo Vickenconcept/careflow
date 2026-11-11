@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { AppContent } from '@/components/app-content';
+import { AssistantWidget } from '@/components/assistant/assistant-widget';
 import { AppShell } from '@/components/app-shell';
 import { AppSidebar } from '@/components/app-sidebar';
 import { AppSidebarHeader } from '@/components/app-sidebar-header';
@@ -32,7 +33,7 @@ export default function AppSidebarLayout({
                 variant="sidebar"
                 className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
             >
-                <div className="shrink-0 border-b border-border/80 bg-white dark:bg-card">
+                <div className="shrink-0 bg-background">
                     <ImpersonationBanner />
                     <AppSidebarHeader breadcrumbs={breadcrumbs} />
                 </div>
@@ -43,6 +44,7 @@ export default function AppSidebarLayout({
                     {children}
                 </div>
             </AppContent>
+            <AssistantWidget />
         </AppShell>
     );
 }

@@ -11,7 +11,7 @@ enum AppointmentConfirmationSource: string
     {
         return match ($this) {
             self::ManualHospitalVerified => 'Manual hospital verification',
-            self::ExternalHis => 'External HIS / scheduling system',
+            self::ExternalHis => 'Hospital system booking reference (entered by staff)',
         };
     }
 

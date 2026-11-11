@@ -22,9 +22,13 @@ class SendPatientEnquiryNotifications implements ShouldQueue
             return;
         }
 
-        if ($event->portalToken !== '') {
+        if ($event->portalToken !== '' && $case->team->notificationEnabled('patient_confirmation')) {
             Notification::route('mail', $case->patient->email)
                 ->notify(new PatientEnquiryReceivedNotification($case, $event->portalToken));
+        }
+
+        if (! $case->team->notificationEnabled('staff_new_enquiry')) {
+            return;
         }
 
         $staff = $case->team->members()

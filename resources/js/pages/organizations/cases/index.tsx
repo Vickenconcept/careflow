@@ -4,9 +4,11 @@ import {
     Building2,
     ClipboardList,
     Copy,
+    Download,
     Eye,
     FileText,
     Flame,
+    Hourglass,
     FolderHeart,
     Languages,
     MapPin,
@@ -32,6 +34,7 @@ import {
     DataTableRow,
 } from '@/components/data-table';
 import { EmptyState } from '@/components/empty-state';
+import PageTabs from '@/components/page-tabs';
 import InputError from '@/components/input-error';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -123,7 +126,16 @@ type Props = {
     permissions?: {
         canAssignCases: boolean;
         canUpdateStatus: boolean;
+        canExport?: boolean;
     };
+    quickViewCounts?: Record<string, number>;
+    savedViews?: SavedView[];
+};
+
+type SavedView = {
+    id: number;
+    name: string;
+    filters: Record<string, string | number | null>;
 };
 
 const ALL = '__all__';
@@ -213,7 +225,97 @@ export default function CasesIndex({
     filterOptions,
     assignableMembers = { coordinators: [], doctors: [] },
     permissions = { canAssignCases: false, canUpdateStatus: false },
+    quickViewCounts = {},
+    savedViews = [],
 }: Props) {
+    const [savingView, setSavingView] = useState(false);
+    const [viewName, setViewName] = useState('');
+    const [viewError, setViewError] = useState<string | null>(null);
+    const [bulkCoordinator, setBulkCoordinator] = useState(UNASSIGNED);
+    const [bulkDoctor, setBulkDoctor] = useState(UNASSIGNED);
+    const [bulkProcessing, setBulkProcessing] = useState(false);
+    const [bulkError, setBulkError] = useState<string | null>(null);
+
+    const currentFilters = Object.fromEntries(
+        Object.entries({
+            search: filters.search,
+            status: filters.status,
+            priority: filters.priority,
+            department_id: filters.department_id,
+            assignment: filters.assignment,
+            sort: filters.sort !== 'recent' ? filters.sort : null,
+        }).filter(([, value]) => value !== null && value !== undefined && value !== ''),
+    );
+    const hasFilters = Object.keys(currentFilters).length > 0;
+
+    const saveView = () => {
+        setViewError(null);
+        router.post(
+            `/${team.slug}/case-views`,
+            { name: viewName, filters: currentFilters },
+            {
+                preserveScroll: true,
+                onSuccess: () => {
+                    setSavingView(false);
+                    setViewName('');
+                },
+                onError: (errors) =>
+                    setViewError(errors.name ?? 'Could not save this view.'),
+            },
+        );
+    };
+
+    const applySavedView = (view: SavedView) => {
+        router.get(`/${team.slug}/cases`, view.filters, {
+            preserveState: false,
+            replace: true,
+        });
+    };
+
+    const removeSavedView = (view: SavedView) => {
+        router.delete(`/${team.slug}/case-views/${view.id}`, {
+            preserveScroll: true,
+        });
+    };
+
+    const submitBulkAssignment = () => {
+        setBulkError(null);
+        const coordinatorId =
+            bulkCoordinator === UNASSIGNED ? null : Number(bulkCoordinator);
+        const doctorId = bulkDoctor === UNASSIGNED ? null : Number(bulkDoctor);
+
+        if (coordinatorId === null && doctorId === null) {
+            setBulkError('Choose a coordinator or a doctor.');
+
+            return;
+        }
+
+        setBulkProcessing(true);
+        router.post(
+            `/${team.slug}/cases/bulk-assignment`,
+            {
+                case_ids: selected,
+                coordinator_id: coordinatorId,
+                doctor_id: doctorId,
+            },
+            {
+                preserveScroll: true,
+                onSuccess: () => {
+                    setSelected([]);
+                    setBulkCoordinator(UNASSIGNED);
+                    setBulkDoctor(UNASSIGNED);
+                },
+                onError: (errors) =>
+                    setBulkError(
+                        errors.assignment ??
+                            Object.values(errors)[0] ??
+                            'Could not assign these cases.',
+                    ),
+                onFinish: () => setBulkProcessing(false),
+            },
+        );
+    };
+
     const [search, setSearch] = useState(filters.search ?? '');
     const [status, setStatus] = useState(filters.status ?? ALL);
     const [priority, setPriority] = useState(filters.priority ?? ALL);
@@ -367,6 +469,64 @@ export default function CasesIndex({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [search]);
 
+    const quickViewIcons: Record<string, typeof ClipboardList> = {
+        all: ClipboardList,
+        mine: UserRound,
+        unassigned: UserRoundCog,
+        awaiting_documents: FileText,
+        awaiting_doctor_review: Stethoscope,
+        awaiting_patient_response: Hourglass,
+    };
+
+    const quickViews: Array<{
+        id: string;
+        label: string;
+        status: string;
+        assignment: string;
+    }> = [
+        { id: 'all', label: 'All cases', status: ALL, assignment: ALL },
+        { id: 'mine', label: 'My cases', status: ALL, assignment: 'mine' },
+        {
+            id: 'unassigned',
+            label: 'Unassigned',
+            status: ALL,
+            assignment: 'unassigned',
+        },
+        {
+            id: 'awaiting_documents',
+            label: 'Awaiting documents',
+            status: 'awaiting_documents',
+            assignment: ALL,
+        },
+        {
+            id: 'awaiting_doctor_review',
+            label: 'Awaiting doctor review',
+            status: 'awaiting_doctor_review',
+            assignment: ALL,
+        },
+        {
+            id: 'awaiting_patient_response',
+            label: 'Awaiting patient',
+            status: 'awaiting_patient_response',
+            assignment: ALL,
+        },
+    ];
+
+    const activeQuickView =
+        quickViews.find(
+            (view) =>
+                (view.status === ALL ? null : view.status) ===
+                    (filters.status ?? null) &&
+                (view.assignment === ALL ? null : view.assignment) ===
+                    (filters.assignment ?? null),
+        )?.id ?? null;
+
+    const selectQuickView = (view: (typeof quickViews)[number]) => {
+        setStatus(view.status);
+        setAssignment(view.assignment);
+        applyFilters({ status: view.status, assignment: view.assignment });
+    };
+
     const toggleAll = (checked: boolean) => {
         setSelected(checked ? cases.data.map((item) => item.id) : []);
     };
@@ -428,6 +588,35 @@ export default function CasesIndex({
                             <RotateCcw className="size-4" />
                             Reset
                         </Button>
+                        {permissions.canExport ? (
+                            <Button
+                                asChild
+                                variant="outline"
+                                className="h-9 rounded-xl"
+                            >
+                                <a
+                                    href={`/${team.slug}/cases/export?${new URLSearchParams(
+                                        Object.entries({
+                                            search: filters.search,
+                                            status: filters.status,
+                                            priority: filters.priority,
+                                            department_id: filters.department_id,
+                                            assignment: filters.assignment,
+                                            sort: filters.sort,
+                                        }).flatMap(([key, value]) =>
+                                            value === null ||
+                                            value === undefined ||
+                                            value === ''
+                                                ? []
+                                                : [[key, String(value)]],
+                                        ),
+                                    ).toString()}`}
+                                >
+                                    <Download className="size-4" />
+                                    Export CSV
+                                </a>
+                            </Button>
+                        ) : null}
                         <Button
                             asChild
                             className="h-9 rounded-xl bg-brand text-white hover:bg-brand/90"
@@ -442,6 +631,114 @@ export default function CasesIndex({
                         </Button>
                     </div>
                 </div>
+
+                <PageTabs
+                    label="Case views"
+                    active={activeQuickView ?? ''}
+                    onSelect={(id) => {
+                        const view = quickViews.find((item) => item.id === id);
+
+                        if (view) {
+                            selectQuickView(view);
+                        }
+                    }}
+                    tabs={quickViews.map((view) => ({
+                        id: view.id,
+                        label: view.label,
+                        icon: quickViewIcons[view.id],
+                        count: quickViewCounts[view.id],
+                    }))}
+                />
+
+                {savedViews.length > 0 || hasFilters ? (
+                    <div className="flex flex-wrap items-center gap-2">
+                        {savedViews.length > 0 ? (
+                            <span className="text-xs font-medium text-slate-500">
+                                Saved views
+                            </span>
+                        ) : null}
+                        {savedViews.map((view) => (
+                            <span
+                                key={view.id}
+                                className="inline-flex items-center overflow-hidden rounded-full border border-slate-200 bg-white text-xs font-medium text-slate-700"
+                            >
+                                <button
+                                    type="button"
+                                    onClick={() => applySavedView(view)}
+                                    className="px-3 py-1.5 hover:bg-brand/5 hover:text-brand"
+                                >
+                                    {view.name}
+                                </button>
+                                <button
+                                    type="button"
+                                    aria-label={`Remove saved view ${view.name}`}
+                                    onClick={() => removeSavedView(view)}
+                                    className="border-l border-slate-200 px-2 py-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600"
+                                >
+                                    <X className="size-3" />
+                                </button>
+                            </span>
+                        ))}
+                        {hasFilters && !savingView ? (
+                            <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                className="h-8 rounded-full"
+                                onClick={() => setSavingView(true)}
+                            >
+                                <Save className="size-3.5" />
+                                Save current filters
+                            </Button>
+                        ) : null}
+                        {savingView ? (
+                            <form
+                                className="flex flex-wrap items-center gap-2"
+                                onSubmit={(event) => {
+                                    event.preventDefault();
+                                    saveView();
+                                }}
+                            >
+                                <Input
+                                    autoFocus
+                                    value={viewName}
+                                    onChange={(event) =>
+                                        setViewName(event.target.value)
+                                    }
+                                    placeholder="Name this view"
+                                    maxLength={60}
+                                    aria-label="Saved view name"
+                                    className="h-8 w-48 rounded-full"
+                                />
+                                <Button
+                                    type="submit"
+                                    size="sm"
+                                    className="h-8 rounded-full bg-brand text-white hover:bg-brand/90"
+                                    disabled={viewName.trim() === ''}
+                                >
+                                    Save
+                                </Button>
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-8 rounded-full"
+                                    onClick={() => {
+                                        setSavingView(false);
+                                        setViewError(null);
+                                    }}
+                                >
+                                    Cancel
+                                </Button>
+                                {viewError ? (
+                                    <span className="text-xs text-rose-600">
+                                        {viewError}
+                                    </span>
+                                ) : null}
+                            </form>
+                        ) : null}
+                    </div>
+                ) : null}
 
                 <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200/80 bg-white p-2 shadow-[0_10px_30px_-24px_rgba(15,23,42,0.45)]">
                     <div className="relative min-w-[220px] flex-1">
@@ -588,9 +885,22 @@ export default function CasesIndex({
                                         return (
                                             <DataTableRow
                                                 key={item.id}
+                                                onClick={(event) => {
+                                                    if (
+                                                        (
+                                                            event.target as HTMLElement
+                                                        ).closest(
+                                                            'a,button,input,label,[role=checkbox]',
+                                                        )
+                                                    ) {
+                                                        return;
+                                                    }
+
+                                                    router.visit(caseHref);
+                                                }}
                                                 className={
                                                     checked
-                                                        ? 'bg-blue-50/40'
+                                                        ? 'bg-brand/5'
                                                         : undefined
                                                 }
                                             >
@@ -617,19 +927,16 @@ export default function CasesIndex({
                                                         </span>
                                                         <div className="min-w-0">
                                                             <div className="flex flex-wrap items-center gap-2">
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() =>
-                                                                        openManageCase(
-                                                                            item,
-                                                                        )
+                                                                <Link
+                                                                    href={
+                                                                        caseHref
                                                                     }
                                                                     className="truncate text-left font-semibold text-slate-900 hover:text-brand"
                                                                 >
                                                                     {
                                                                         item.patient_name
                                                                     }
-                                                                </button>
+                                                                </Link>
                                                                 {item.is_demo ? (
                                                                     <Badge
                                                                         variant="secondary"
@@ -811,10 +1118,81 @@ export default function CasesIndex({
                 )}
 
                 {selected.length > 0 ? (
-                    <div className="fixed inset-x-0 bottom-4 z-20 mx-auto flex w-fit items-center gap-3 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm shadow-lg">
+                    <div className="fixed inset-x-3 bottom-4 z-20 mx-auto flex w-fit max-w-full flex-wrap items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm shadow-lg">
                         <span className="font-medium text-slate-800">
                             {selected.length} selected
                         </span>
+                        {permissions.canAssignCases ? (
+                            <>
+                                <Select
+                                    value={bulkCoordinator}
+                                    onValueChange={setBulkCoordinator}
+                                >
+                                    <SelectTrigger
+                                        aria-label="Bulk coordinator"
+                                        className="h-8 w-44 rounded-full"
+                                    >
+                                        <SelectValue placeholder="Coordinator" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value={UNASSIGNED}>
+                                            Coordinator: no change
+                                        </SelectItem>
+                                        {assignableMembers.coordinators.map(
+                                            (member) => (
+                                                <SelectItem
+                                                    key={member.id}
+                                                    value={String(member.id)}
+                                                >
+                                                    {member.name}
+                                                </SelectItem>
+                                            ),
+                                        )}
+                                    </SelectContent>
+                                </Select>
+                                <Select
+                                    value={bulkDoctor}
+                                    onValueChange={setBulkDoctor}
+                                >
+                                    <SelectTrigger
+                                        aria-label="Bulk doctor"
+                                        className="h-8 w-44 rounded-full"
+                                    >
+                                        <SelectValue placeholder="Doctor" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value={UNASSIGNED}>
+                                            Doctor: no change
+                                        </SelectItem>
+                                        {assignableMembers.doctors.map(
+                                            (member) => (
+                                                <SelectItem
+                                                    key={member.id}
+                                                    value={String(member.id)}
+                                                >
+                                                    {member.name}
+                                                </SelectItem>
+                                            ),
+                                        )}
+                                    </SelectContent>
+                                </Select>
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    className="rounded-full bg-brand text-white hover:bg-brand/90"
+                                    disabled={bulkProcessing}
+                                    onClick={submitBulkAssignment}
+                                >
+                                    <UserRoundCog className="size-4" />
+                                    Assign
+                                </Button>
+                                {bulkError ? (
+                                    <span className="text-xs text-rose-600">
+                                        {bulkError}
+                                    </span>
+                                ) : null}
+                            </>
+                        ) : null}
                         <Button
                             type="button"
                             size="sm"

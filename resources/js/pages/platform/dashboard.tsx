@@ -1,4 +1,4 @@
-import { Head, router } from '@inertiajs/react';
+import { Head, Link, router } from '@inertiajs/react';
 import { Building2, Users } from 'lucide-react';
 import {
     DataTable,
@@ -29,6 +29,17 @@ type OrganizationRow = {
     members_count: number;
     departments_count: number;
     cases_count: number;
+    plan_label: string;
+    subscription_status: string;
+    seat_limit: number | null;
+    usage: {
+        staff: number;
+        pending_invitations: number;
+        cases_total: number;
+        cases_30_days: number;
+        documents: number;
+        storage_mb: number;
+    };
     members: MemberRow[];
 };
 
@@ -238,6 +249,11 @@ export default function PlatformDashboard({
                                     <DataTableHead>Members</DataTableHead>
                                     <DataTableHead>Departments</DataTableHead>
                                     <DataTableHead>Cases</DataTableHead>
+                                    <DataTableHead>Plan</DataTableHead>
+                                    <DataTableHead>Usage</DataTableHead>
+                                    <DataTableHead>
+                                        <span className="sr-only">Manage</span>
+                                    </DataTableHead>
                                 </DataTableHeader>
                                 <DataTableBody>
                                     {organizations.map((organization) => (
@@ -281,6 +297,53 @@ export default function PlatformDashboard({
                                             </DataTableCell>
                                             <DataTableCell className="tabular-nums text-slate-700">
                                                 {organization.cases_count}
+                                            </DataTableCell>
+                                            <DataTableCell>
+                                                <div className="text-sm text-slate-800">
+                                                    {organization.plan_label}
+                                                </div>
+                                                <Badge
+                                                    variant={
+                                                        organization.subscription_status ===
+                                                        'suspended'
+                                                            ? 'destructive'
+                                                            : 'secondary'
+                                                    }
+                                                    className="mt-1 rounded-full capitalize"
+                                                >
+                                                    {
+                                                        organization.subscription_status
+                                                    }
+                                                </Badge>
+                                            </DataTableCell>
+                                            <DataTableCell className="text-xs text-slate-600">
+                                                <div>
+                                                    Seats {organization.usage.staff}
+                                                    {organization.seat_limit
+                                                        ? ` / ${organization.seat_limit}`
+                                                        : ''}
+                                                </div>
+                                                <div>
+                                                    {organization.usage.cases_30_days}{' '}
+                                                    new cases (30d)
+                                                </div>
+                                                <div>
+                                                    {organization.usage.documents} docs ·{' '}
+                                                    {organization.usage.storage_mb} MB
+                                                </div>
+                                            </DataTableCell>
+                                            <DataTableCell>
+                                                <Button
+                                                    asChild
+                                                    size="sm"
+                                                    variant="outline"
+                                                >
+                                                    <Link
+                                                        href={`/platform/organizations/${organization.slug}`}
+                                                    >
+                                                        Manage
+                                                    </Link>
+                                                </Button>
                                             </DataTableCell>
                                         </DataTableRow>
                                     ))}

@@ -70,4 +70,46 @@ enum CaseStatus: string
             self::Declined => 'Declined',
         };
     }
+
+    /**
+     * Stable, patient-safe state key used by the portal to show localized guidance.
+     */
+    public function patientStateKey(): string
+    {
+        return match ($this) {
+            self::NewEnquiry,
+            self::DocumentsReceived,
+            self::AiProcessing,
+            self::AwaitingCoordinatorReview => 'received',
+            self::AwaitingDocuments,
+            self::AdditionalInformationRequired => 'awaiting_documents',
+            self::AwaitingDoctorReview,
+            self::TreatmentProposalPreparation => 'clinical_review',
+            self::ProposalSent,
+            self::AwaitingPatientResponse => 'proposal',
+            self::AppointmentPlanning,
+            self::TravelCoordination,
+            self::TreatmentScheduled => 'appointment',
+            self::TreatmentCompleted,
+            self::FollowUp => 'follow_up',
+            self::Closed => 'closed',
+            self::Declined => 'declined',
+        };
+    }
+
+    /**
+     * Position in the six-stage patient journey (1-6), or null when the case has ended.
+     */
+    public function patientJourneyStage(): ?int
+    {
+        return match ($this->patientStateKey()) {
+            'received' => $this === self::NewEnquiry ? 1 : 2,
+            'awaiting_documents' => 2,
+            'clinical_review' => 3,
+            'proposal' => 4,
+            'appointment' => 5,
+            'follow_up' => 6,
+            default => null,
+        };
+    }
 }

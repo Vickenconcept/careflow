@@ -37,6 +37,7 @@ type Props = {
         name: string;
         slug: string;
         brand_primary_color: string | null;
+        logo_url?: string | null;
         default_language: string;
         supported_languages: string[];
     };
@@ -47,7 +48,7 @@ type Props = {
     initialLanguage: string;
 };
 
-const CAREFlow_BLUE = '#2f6fed';
+const DEFAULT_ACCENT = '#5f7d45';
 
 const STEP_FIELDS = [
     [
@@ -117,7 +118,7 @@ export default function PortalIntake({
 
     const t = (key: string) => intakeText(locale, key);
     const rtl = isRtl(locale);
-    const accent = organization.brand_primary_color || CAREFlow_BLUE;
+    const accent = organization.brand_primary_color || DEFAULT_ACCENT;
 
     const steps = useMemo(
         () => [
@@ -229,13 +230,20 @@ export default function PortalIntake({
 
     return (
         <div
-            className="min-h-screen bg-[linear-gradient(180deg,#e8eef6_0%,#f3f6fb_42%,#eef2f8_100%)]"
+            className="min-h-screen bg-[#eceee8]"
             dir={rtl ? 'rtl' : 'ltr'}
         >
             <Head title={`${organization.name} · ${t('title')}`} />
 
             <div className="mx-auto max-w-3xl px-4 py-10">
                 <div className="mb-8 space-y-4">
+                    {organization.logo_url ? (
+                        <img
+                            src={organization.logo_url}
+                            alt=""
+                            className="h-12 max-w-[200px] object-contain"
+                        />
+                    ) : null}
                     <p
                         className="text-xs font-semibold tracking-[0.16em] uppercase"
                         style={{ color: accent }}
@@ -579,6 +587,13 @@ export default function PortalIntake({
 
                     {step === 1 ? (
                         <div className="grid gap-4">
+                            <p className="flex items-start gap-2 rounded-xl border border-blue-100 bg-blue-50/60 px-3 py-2.5 text-sm text-slate-700">
+                                <ShieldCheck
+                                    className="mt-0.5 size-4 shrink-0 text-blue-600"
+                                    aria-hidden="true"
+                                />
+                                {t('whyMedical')}
+                            </p>
                             <Field
                                 label={t('department')}
                                 error={allErrors.department_id}
@@ -669,6 +684,13 @@ export default function PortalIntake({
 
                     {step === 2 ? (
                         <div className="space-y-4">
+                            <p className="flex items-start gap-2 rounded-xl border border-blue-100 bg-blue-50/60 px-3 py-2.5 text-sm text-slate-700">
+                                <ShieldCheck
+                                    className="mt-0.5 size-4 shrink-0 text-blue-600"
+                                    aria-hidden="true"
+                                />
+                                {t('whyDocuments')}
+                            </p>
                             <Field
                                 label={t('documents')}
                                 error={allErrors.documents}
@@ -679,7 +701,9 @@ export default function PortalIntake({
                                         strokeWidth={1.5}
                                     />
                                     <span className="text-sm font-medium text-slate-700">
-                                        Upload PDF or images
+                                        {form.data.documents.length > 0
+                                            ? t('addFiles')
+                                            : 'Upload PDF or images'}
                                     </span>
                                     <span className="text-xs text-slate-500">
                                         PDF, JPG, PNG · optional
@@ -690,19 +714,24 @@ export default function PortalIntake({
                                         accept=".pdf,.jpg,.jpeg,.png"
                                         className="hidden"
                                         onChange={(e) => {
-                                            const files = Array.from(
+                                            const added = Array.from(
                                                 e.target.files ?? [],
                                             );
-                                            form.setData('documents', files);
-                                            form.setData(
-                                                'document_categories',
-                                                files.map(
+                                            form.setData('documents', [
+                                                ...form.data.documents,
+                                                ...added,
+                                            ]);
+                                            form.setData('document_categories', [
+                                                ...form.data
+                                                    .document_categories,
+                                                ...added.map(
                                                     () =>
                                                         documentCategories[0]
                                                             ?.value ??
                                                         'other_supporting_document',
                                                 ),
-                                            );
+                                            ]);
+                                            e.target.value = '';
                                         }}
                                     />
                                 </label>
@@ -713,8 +742,36 @@ export default function PortalIntake({
                                     className="grid gap-2 rounded-xl border border-slate-200 bg-white p-3 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_4px_12px_rgba(15,23,42,0.04)] md:grid-cols-[1fr_220px]"
                                 >
                                     <div className="flex items-center gap-2 text-sm text-slate-700">
-                                        <FileText className="size-4 text-blue-600" />
-                                        {file.name}
+                                        <FileText className="size-4 shrink-0 text-blue-600" />
+                                        <span className="min-w-0 flex-1 truncate">
+                                            {file.name}
+                                        </span>
+                                        <span className="shrink-0 text-xs text-slate-500">
+                                            {file.size >= 1048576
+                                                ? `${(file.size / 1048576).toFixed(1)} MB`
+                                                : `${Math.max(1, Math.round(file.size / 1024))} KB`}
+                                        </span>
+                                        <button
+                                            type="button"
+                                            className="inline-flex min-h-9 shrink-0 items-center rounded-lg px-2 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+                                            disabled={form.processing}
+                                            onClick={() => {
+                                                form.setData(
+                                                    'documents',
+                                                    form.data.documents.filter(
+                                                        (_, i) => i !== index,
+                                                    ),
+                                                );
+                                                form.setData(
+                                                    'document_categories',
+                                                    form.data.document_categories.filter(
+                                                        (_, i) => i !== index,
+                                                    ),
+                                                );
+                                            }}
+                                        >
+                                            {t('removeFile')}
+                                        </button>
                                     </div>
                                     <Select
                                         value={
@@ -814,6 +871,31 @@ export default function PortalIntake({
                         </div>
                     ) : null}
 
+                        {form.processing && form.progress ? (
+                            <div className="space-y-1.5 border-t border-slate-100 pt-4">
+                                <div
+                                    role="progressbar"
+                                    aria-valuemin={0}
+                                    aria-valuemax={100}
+                                    aria-valuenow={
+                                        form.progress.percentage ?? 0
+                                    }
+                                    className="h-2 overflow-hidden rounded-full bg-slate-200"
+                                >
+                                    <div
+                                        className="h-full rounded-full transition-all"
+                                        style={{
+                                            width: `${form.progress.percentage ?? 0}%`,
+                                            backgroundColor: accent,
+                                        }}
+                                    />
+                                </div>
+                                <p className="text-xs text-slate-500">
+                                    {t('keepOpen')}
+                                </p>
+                            </div>
+                        ) : null}
+
                         <div className="flex items-center justify-between gap-3 border-t border-slate-100 pt-4">
                             <Button
                                 type="button"
@@ -836,7 +918,9 @@ export default function PortalIntake({
                                 disabled={form.processing}
                             >
                                 {form.processing
-                                    ? 'Submitting…'
+                                    ? form.progress
+                                        ? `${t('uploading')} ${form.progress.percentage ?? 0}%`
+                                        : 'Submitting…'
                                     : step === 3
                                       ? t('submit')
                                       : t('next')}
@@ -864,7 +948,7 @@ function IconInput({
                 'flex h-11 w-full items-center gap-2 rounded-xl border bg-white px-3 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_4px_12px_rgba(15,23,42,0.04)] transition-[color,box-shadow]',
                 invalid
                     ? 'border-destructive shadow-[0_0_0_4px_rgba(239,68,68,0.12)] focus-within:border-destructive focus-within:shadow-[0_0_0_4px_rgba(239,68,68,0.12)]'
-                    : 'border-input focus-within:border-brand/40 focus-within:shadow-[0_1px_2px_rgba(47,111,237,0.08),0_0_0_4px_rgba(47,111,237,0.12)]',
+                    : 'border-input focus-within:border-brand/40 focus-within:shadow-[0_1px_2px_rgba(95,125,69,0.08),0_0_0_4px_rgba(95,125,69,0.14)]',
             )}
         >
             <Icon

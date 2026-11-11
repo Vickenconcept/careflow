@@ -9,6 +9,7 @@ use App\Listeners\Patients\QueueUploadedDocumentsForProcessing;
 use App\Models\Department;
 use App\Models\Patient;
 use App\Models\PatientCase;
+use App\Models\PatientConsent;
 use App\Models\PatientDocument;
 use App\Models\PatientEnquiry;
 use App\Models\Team;
@@ -165,6 +166,7 @@ test('document validation jobs are queued after enquiry submission', function ()
         'path' => $path,
         'processing_status' => DocumentProcessingStatus::Uploaded,
     ]);
+    PatientConsent::factory()->create(['team_id' => $team->id, 'patient_id' => $patient->id, 'consent_type' => ConsentType::AiProcessing]);
 
     app(QueueUploadedDocumentsForProcessing::class)->handle(
         new PatientEnquirySubmitted($enquiry->id, $case->id),

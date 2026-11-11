@@ -1,5 +1,5 @@
 import { Head, Link } from '@inertiajs/react';
-import { ClipboardList, Eye } from 'lucide-react';
+import { ClipboardList, Eye, FileText, Stethoscope } from 'lucide-react';
 import {
     DataTable,
     DataTableBody,
@@ -10,9 +10,9 @@ import {
     DataTableRow,
 } from '@/components/data-table';
 import { EmptyState } from '@/components/empty-state';
+import { RowAction, RowActions } from '@/components/row-actions';
 import Heading from '@/components/heading';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { dashboard } from '@/routes';
 
@@ -33,6 +33,26 @@ type QueueItem = {
 type Props = {
     team: { id: number; name: string; slug: string };
     queue: QueueItem[];
+    stats?: {
+        awaiting_review: number;
+        average_review_hours: number | null;
+        reviews_last_90_days: number;
+    };
+    recentlyReviewed?: Array<{
+        reference: string;
+        patient_name: string | null;
+        outcome: string | null;
+        completed_at: string | null;
+        url: string;
+    }>;
+    upcoming?: Array<{
+        reference: string;
+        patient_name: string | null;
+        type: string;
+        starts_at: string;
+        location: string | null;
+        url: string;
+    }>;
 };
 
 const STATUS_STYLES: Record<string, string> = {
@@ -51,7 +71,13 @@ function initials(name: string): string {
         .join('');
 }
 
-export default function DoctorQueue({ team, queue }: Props) {
+export default function DoctorQueue({
+    team,
+    queue,
+    stats,
+    recentlyReviewed = [],
+    upcoming = [],
+}: Props) {
     return (
         <>
             <Head title="Doctor queue" />
@@ -60,6 +86,120 @@ export default function DoctorQueue({ team, queue }: Props) {
                     title="Doctor queue"
                     description="Clinical cases awaiting doctor review, additional information, or proposal preparation."
                 />
+
+                {stats ? (
+                    <div className="grid gap-3 sm:grid-cols-3">
+                        <div className="rounded-xl border border-slate-200 bg-white p-4">
+                            <p className="text-xs font-medium text-slate-500">
+                                Awaiting your review
+                            </p>
+                            <p className="mt-1 text-2xl font-semibold">
+                                {stats.awaiting_review}
+                            </p>
+                        </div>
+                        <div className="rounded-xl border border-slate-200 bg-white p-4">
+                            <p className="text-xs font-medium text-slate-500">
+                                Average review time
+                            </p>
+                            <p className="mt-1 text-2xl font-semibold">
+                                {stats.average_review_hours === null
+                                    ? '—'
+                                    : `${stats.average_review_hours} h`}
+                            </p>
+                            <p className="text-xs text-slate-500">
+                                From starting a review to completing it, last 90
+                                days
+                            </p>
+                        </div>
+                        <div className="rounded-xl border border-slate-200 bg-white p-4">
+                            <p className="text-xs font-medium text-slate-500">
+                                Reviews completed
+                            </p>
+                            <p className="mt-1 text-2xl font-semibold">
+                                {stats.reviews_last_90_days}
+                            </p>
+                            <p className="text-xs text-slate-500">
+                                Last 90 days
+                            </p>
+                        </div>
+                    </div>
+                ) : null}
+
+                {upcoming.length > 0 || recentlyReviewed.length > 0 ? (
+                    <div className="grid gap-4 lg:grid-cols-2">
+                        <section className="rounded-xl border border-slate-200 bg-white">
+                            <h2 className="border-b border-slate-100 px-4 py-3 text-sm font-semibold">
+                                Upcoming consultations
+                            </h2>
+                            {upcoming.length === 0 ? (
+                                <p className="px-4 py-4 text-sm text-slate-500">
+                                    No confirmed consultations booked with you.
+                                </p>
+                            ) : (
+                                <ul className="divide-y divide-slate-100">
+                                    {upcoming.map((item) => (
+                                        <li key={`${item.reference}-${item.starts_at}`}>
+                                            <Link
+                                                href={item.url}
+                                                className="block px-4 py-3 text-sm hover:bg-slate-50"
+                                            >
+                                                <p className="font-medium">
+                                                    {item.patient_name ??
+                                                        item.reference}{' '}
+                                                    · {item.type}
+                                                </p>
+                                                <p className="text-xs text-slate-500">
+                                                    {new Date(
+                                                        item.starts_at,
+                                                    ).toLocaleString()}
+                                                    {item.location
+                                                        ? ` · ${item.location}`
+                                                        : ''}
+                                                </p>
+                                            </Link>
+                                        </li>
+                                    ))}
+                                </ul>
+                            )}
+                        </section>
+                        <section className="rounded-xl border border-slate-200 bg-white">
+                            <h2 className="border-b border-slate-100 px-4 py-3 text-sm font-semibold">
+                                Recently reviewed
+                            </h2>
+                            {recentlyReviewed.length === 0 ? (
+                                <p className="px-4 py-4 text-sm text-slate-500">
+                                    You have not completed a review yet.
+                                </p>
+                            ) : (
+                                <ul className="divide-y divide-slate-100">
+                                    {recentlyReviewed.map((item) => (
+                                        <li key={`${item.reference}-${item.completed_at}`}>
+                                            <Link
+                                                href={item.url}
+                                                className="block px-4 py-3 text-sm hover:bg-slate-50"
+                                            >
+                                                <p className="font-medium">
+                                                    {item.patient_name ??
+                                                        item.reference}
+                                                    {item.outcome
+                                                        ? ` · ${item.outcome}`
+                                                        : ''}
+                                                </p>
+                                                <p className="text-xs text-slate-500">
+                                                    {item.completed_at
+                                                        ? new Date(
+                                                              item.completed_at,
+                                                          ).toLocaleString()
+                                                        : ''}
+                                                </p>
+                                            </Link>
+                                        </li>
+                                    ))}
+                                </ul>
+                            )}
+                        </section>
+                    </div>
+                ) : null}
 
                 {queue.length === 0 ? (
                     <EmptyState
@@ -82,7 +222,7 @@ export default function DoctorQueue({ team, queue }: Props) {
                             </DataTableHeader>
                             <DataTableBody>
                                 {queue.map((item) => {
-                                    const caseHref = `/${team.slug}/cases/${item.reference}`;
+                                    const caseHref = `/${team.slug}/cases/${item.reference}?tab=evaluation`;
 
                                     return (
                                         <DataTableRow key={item.reference}>
@@ -155,20 +295,27 @@ export default function DoctorQueue({ team, queue }: Props) {
                                                 {item.assigned_doctor ??
                                                     'Unassigned'}
                                             </DataTableCell>
-                                            <DataTableCell className="text-right">
-                                                <Button
-                                                    asChild
-                                                    variant="outline"
-                                                    size="sm"
-                                                    className="rounded-full"
-                                                >
-                                                    <Link href={caseHref}>
-                                                        <Eye className="size-3.5" />
-                                                        Open
-                                                    </Link>
-                                                </Button>
-                                            </DataTableCell>
-                                        </DataTableRow>
+                                            <DataTableCell>
+                                                <RowActions>
+                                                    <RowAction
+                                                        label="Review case"
+                                                        icon={Stethoscope}
+                                                        href={caseHref}
+                                                        tone="primary"
+                                                        showLabel
+                                                    />
+                                                    <RowAction
+                                                        label="Open documents"
+                                                        icon={FileText}
+                                                        href={`/${team.slug}/cases/${item.reference}?tab=documents`}
+                                                    />
+                                                    <RowAction
+                                                        label="Case overview"
+                                                        icon={Eye}
+                                                        href={`/${team.slug}/cases/${item.reference}`}
+                                                    />
+                                                </RowActions>
+                                            </DataTableCell>                                        </DataTableRow>
                                     );
                                 })}
                             </DataTableBody>

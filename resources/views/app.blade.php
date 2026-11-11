@@ -17,12 +17,12 @@
 
         <style>
             html {
-                background-color: #f4f7fc;
+                background-color: #eceee8;
                 color-scheme: light;
             }
 
             html.dark {
-                background-color: #0b1220;
+                background-color: #0e1610;
                 color-scheme: dark;
             }
         </style>

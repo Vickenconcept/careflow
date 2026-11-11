@@ -68,90 +68,140 @@
     --color-brand-foreground: var(--brand-foreground);
     --color-success: var(--success);
     --color-warning: var(--warning);
+
+    /* Sage re-map of the colour families used across the app, so older
+       utility classes (slate, blue, sky, indigo) follow the green theme. */
+    --color-slate-50: #f6f7f3;
+    --color-slate-100: #eef0ea;
+    --color-slate-200: #dfe3d8;
+    --color-slate-300: #c8cfbd;
+    --color-slate-400: #98a393;
+    --color-slate-500: #6b7a70;
+    --color-slate-600: #55655a;
+    --color-slate-700: #3f5045;
+    --color-slate-800: #26362b;
+    --color-slate-900: #12281c;
+    --color-slate-950: #0c1a12;
+
+    --color-blue-50: #f0f5e8;
+    --color-blue-100: #e4ecd9;
+    --color-blue-200: #cbd7b8;
+    --color-blue-300: #adc28d;
+    --color-blue-400: #8aa860;
+    --color-blue-500: #6f8f4e;
+    --color-blue-600: #5f7d45;
+    --color-blue-700: #4f6e36;
+    --color-blue-800: #3f5a2c;
+    --color-blue-900: #2f4421;
+    --color-blue-950: #1c2b14;
+
+    --color-sky-50: #f0f5e8;
+    --color-sky-100: #e4ecd9;
+    --color-sky-200: #cbd7b8;
+    --color-sky-300: #adc28d;
+    --color-sky-400: #8aa860;
+    --color-sky-500: #6f8f4e;
+    --color-sky-600: #5f7d45;
+    --color-sky-700: #4f6e36;
+    --color-sky-800: #3f5a2c;
+    --color-sky-900: #2f4421;
+    --color-sky-950: #1c2b14;
+
+    --color-indigo-50: #f6f0f9;
+    --color-indigo-100: #ecdff2;
+    --color-indigo-200: #d9bfe6;
+    --color-indigo-300: #c79dd9;
+    --color-indigo-400: #b07bc6;
+    --color-indigo-500: #9a5fb2;
+    --color-indigo-600: #834c99;
+    --color-indigo-700: #6b3d7e;
+    --color-indigo-800: #553165;
+    --color-indigo-900: #3f2549;
+    --color-indigo-950: #261530;
 }
 
 :root {
-    --background: #e9eef6;
-    --foreground: #12203a;
-    --card: #ffffff;
-    --card-foreground: #12203a;
-    --popover: #ffffff;
-    --popover-foreground: #12203a;
-    --primary: #2f6fed;
+    --background: #eceee8;
+    --foreground: #12281c;
+    --card: #fbfbf9;
+    --card-foreground: #12281c;
+    --popover: #fbfbf9;
+    --popover-foreground: #12281c;
+    --primary: #5f7d45;
     --primary-foreground: #ffffff;
-    --secondary: #eef2f8;
-    --secondary-foreground: #1a2b4a;
-    --muted: #eef2f8;
-    --muted-foreground: #66758f;
-    --accent: #eef2f8;
-    --accent-foreground: #1a2b4a;
-    --destructive: #e11d48;
-    --destructive-foreground: #fff5f5;
-    --border: #e4e9f2;
-    --input: #e4e9f2;
-    --ring: #2f6fed;
-    --chart-1: #2f6fed;
-    --chart-2: #059669;
-    --chart-3: #d97706;
-    --chart-4: #9333ea;
-    --chart-5: #e11d48;
+    --secondary: #e4e9dc;
+    --secondary-foreground: #26412f;
+    --muted: #eef0ea;
+    --muted-foreground: #6b7a70;
+    --accent: #e4ecd9;
+    --accent-foreground: #26412f;
+    --destructive: #c2553d;
+    --destructive-foreground: #fff5f2;
+    --border: #dde2d5;
+    --input: #d3dac9;
+    --ring: #86a05f;
+    --chart-1: #6f8f4e;
+    --chart-2: #e2b93d;
+    --chart-3: #d6b3e3;
+    --chart-4: #a8c07f;
+    --chart-5: #c2553d;
     --radius: 1rem;
-    --sidebar: #ffffff;
-    --sidebar-foreground: #1a2b4a;
-    --sidebar-primary: #2f6fed;
+    --sidebar: #eceee8;
+    --sidebar-foreground: #26412f;
+    --sidebar-primary: #5f7d45;
     --sidebar-primary-foreground: #ffffff;
-    --sidebar-accent: #f3f6fb;
-    --sidebar-accent-foreground: #1a2b4a;
-    --sidebar-border: #e8edf5;
-    --sidebar-ring: #2f6fed;
-    --surface: #e9eef6;
-    --surface-elevated: #ffffff;
-    --brand: #2f6fed;
+    --sidebar-accent: #dfe8d2;
+    --sidebar-accent-foreground: #12281c;
+    --sidebar-border: #dde2d5;
+    --sidebar-ring: #86a05f;
+    --surface: #eceee8;
+    --surface-elevated: #fbfbf9;
+    --brand: #5f7d45;
     --brand-foreground: #ffffff;
-    --success: #059669;
-    --warning: #d97706;
+    --success: #4f8a3a;
+    --warning: #c8921a;
 }
 
 .dark {
-    --background: #0b1220;
-    --foreground: #eef3ff;
-    --card: #121a2b;
-    --card-foreground: #eef3ff;
-    --popover: #151e31;
-    --popover-foreground: #eef3ff;
-    --primary: #4f8cff;
-    --primary-foreground: #081018;
-    --secondary: #1a2438;
-    --secondary-foreground: #e8eefc;
-    --muted: #1a2438;
-    --muted-foreground: #9aa8c7;
-    --accent: #1e2a42;
-    --accent-foreground: #eef3ff;
-    --destructive: #f07178;
-    --destructive-foreground: #fff5f5;
-    --border: #243149;
-    --input: #1c2740;
-    --ring: #4f8cff;
-    --chart-1: #4f8cff;
-    --chart-2: #34d399;
-    --chart-3: #fbbf24;
-    --chart-4: #c084fc;
-    --chart-5: #fb7185;
-    --radius: 0.9rem;
-    --sidebar: #090f1a;
-    --sidebar-foreground: #e8eefc;
-    --sidebar-primary: #4f8cff;
-    --sidebar-primary-foreground: #081018;
-    --sidebar-accent: #162033;
-    --sidebar-accent-foreground: #eef3ff;
-    --sidebar-border: #1c2740;
-    --sidebar-ring: #4f8cff;
-    --surface: #0f1728;
-    --surface-elevated: #162033;
-    --brand: #4f8cff;
-    --brand-foreground: #081018;
-    --success: #34d399;
-    --warning: #fbbf24;
+    --background: #0e1610;
+    --foreground: #e9f0e5;
+    --card: #151f18;
+    --card-foreground: #e9f0e5;
+    --popover: #18241c;
+    --popover-foreground: #e9f0e5;
+    --primary: #8fb06a;
+    --primary-foreground: #0e1610;
+    --secondary: #1c2820;
+    --secondary-foreground: #dbe7d3;
+    --muted: #1c2820;
+    --muted-foreground: #9bab9f;
+    --accent: #26352b;
+    --accent-foreground: #e9f0e5;
+    --destructive: #e3836d;
+    --destructive-foreground: #fff5f2;
+    --border: #26332a;
+    --input: #26332a;
+    --ring: #8fb06a;
+    --chart-1: #8fb06a;
+    --chart-2: #e8c352;
+    --chart-3: #d6b3e3;
+    --chart-4: #b9d09a;
+    --chart-5: #e3836d;
+    --radius: 1rem;
+    --sidebar: #0e1610;
+    --sidebar-foreground: #dbe7d3;
+    --sidebar-primary: #8fb06a;
+    --sidebar-primary-foreground: #0e1610;
+    --sidebar-accent: #1f2d24;
+    --sidebar-accent-foreground: #e9f0e5;
+    --sidebar-border: #26332a;
+    --sidebar-ring: #8fb06a;
+    --surface: #0e1610;
+    --surface-elevated: #18241c;
+    --brand: #8fb06a;
+    --brand-foreground: #0e1610;
+    --success: #7fc067;
+    --warning: #e8c352;
 }
 
 @layer base {
@@ -161,18 +211,6 @@
 
     body {
         @apply bg-background text-foreground antialiased;
-        background-image:
-            radial-gradient(
-                ellipse 80% 50% at 10% -10%,
-                color-mix(in oklab, var(--brand) 18%, transparent),
-                transparent 55%
-            ),
-            radial-gradient(
-                ellipse 60% 40% at 100% 0%,
-                color-mix(in oklab, var(--chart-2) 10%, transparent),
-                transparent 50%
-            );
-        background-attachment: fixed;
     }
 
     .font-display {
@@ -194,4 +232,31 @@
             0 0 0 1px color-mix(in oklab, var(--brand) 25%, transparent),
             0 18px 50px -28px color-mix(in oklab, var(--brand) 55%, transparent);
     }
+}
+
+/*
+ * Cards that stay white in both themes (for example on the case page) keep the
+ * light palette inside them, so labels and inputs stay readable in dark mode.
+ */
+.light-surface {
+    --background: #eceee8;
+    --foreground: #12281c;
+    --card: #fbfbf9;
+    --card-foreground: #12281c;
+    --popover: #fbfbf9;
+    --popover-foreground: #12281c;
+    --secondary: #e4e9dc;
+    --secondary-foreground: #26412f;
+    --muted: #eef0ea;
+    --muted-foreground: #6b7a70;
+    --accent: #e4ecd9;
+    --accent-foreground: #26412f;
+    --border: #dde2d5;
+    --input: #d3dac9;
+    --brand: #5f7d45;
+    --brand-foreground: #ffffff;
+    --primary: #5f7d45;
+    --primary-foreground: #ffffff;
+    color-scheme: light;
+    color: var(--foreground);
 }

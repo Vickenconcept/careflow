@@ -24,6 +24,19 @@ class TeamInvitationController extends Controller
     {
         Gate::authorize('inviteMember', $team);
 
+        $seatLimit = $team->organizationSetting?->seat_limit;
+
+        if ($seatLimit !== null) {
+            $used = $team->members()->count()
+                + $team->invitations()->whereNull('accepted_at')->where('expires_at', '>', now())->count();
+
+            if ($used >= $seatLimit) {
+                return back()->withErrors([
+                    'email' => "Your plan allows {$seatLimit} staff seats and all are in use. Contact the platform administrator to add more.",
+                ]);
+            }
+        }
+
         $invitation = $team->invitations()->create([
             'email' => $request->validated('email'),
             'role' => TeamRole::from($request->validated('role')),

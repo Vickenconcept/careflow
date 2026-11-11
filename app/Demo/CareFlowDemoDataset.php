@@ -149,7 +149,7 @@ class CareFlowDemoDataset
             'default_currency' => 'EUR',
             'default_language' => 'en',
             'supported_languages' => ['en', 'tr', 'ar', 'ru', 'az'],
-            'brand_primary_color' => '#2F6FED',
+            'brand_primary_color' => '#5F7D45',
             'brand_secondary_color' => '#134E4A',
             'ai_processing_enabled' => true,
             'ai_provider' => 'openai',

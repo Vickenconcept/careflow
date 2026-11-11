@@ -6,7 +6,6 @@ use App\Ai\Agents\DocumentVisionTextExtractionAgent;
 use App\Contracts\Documents\DocumentTextExtractor;
 use App\Domains\Documents\Data\ExtractedTextResult;
 use App\Models\PatientDocument;
-use Illuminate\Support\Facades\Storage;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Files\Document as AiDocument;
 use Laravel\Ai\Files\Image as AiImage;
@@ -15,26 +14,28 @@ use RuntimeException;
 /**
  * Text extraction for the OpenAI/Laravel AI pipeline.
  *
- * Readable UTF-8 sources are used directly. Images use Laravel AI vision
- * attachments. PDFs are attached via Laravel AI document files when possible.
+ * Readable UTF-8 text files are used directly. Images use Laravel AI vision
+ * attachments. PDFs are always sent as Laravel AI document files, even when
+ * uncompressed, so raw PDF syntax is never treated as the document's text.
  */
 class OpenAiDocumentTextExtractor implements DocumentTextExtractor
 {
     public function extract(PatientDocument $document): ExtractedTextResult
     {
-        if (! Storage::disk($document->disk)->exists($document->path)) {
+        if (! $document->filesystem()->exists($document->path)) {
             throw new RuntimeException('Stored file is missing from private storage.');
         }
 
-        $absolutePath = Storage::disk($document->disk)->path($document->path);
         $extension = strtolower($document->extension);
-        $bytes = Storage::disk($document->disk)->get($document->path);
+        $bytes = $document->filesystem()->get($document->path);
 
         if (! is_string($bytes) || $bytes === '') {
             throw new RuntimeException('Document file is empty.');
         }
 
-        if (! str_contains($bytes, "\0") && preg_match('//u', $bytes) === 1) {
+        $isBinaryFormat = in_array($extension, ['pdf', 'jpg', 'jpeg', 'png', 'webp', 'gif'], true);
+
+        if (! $isBinaryFormat && ! str_contains($bytes, "\0") && preg_match('//u', $bytes) === 1) {
             $text = trim($bytes);
 
             if ($text !== '') {
@@ -59,11 +60,11 @@ class OpenAiDocumentTextExtractor implements DocumentTextExtractor
         }
 
         if (in_array($extension, ['jpg', 'jpeg', 'png', 'webp', 'gif'], true)) {
-            return $this->extractViaVision($document, $absolutePath);
+            return $document->withLocalCopy(fn (string $localPath) => $this->extractViaVision($document, $localPath));
         }
 
         if ($extension === 'pdf') {
-            return $this->extractViaDocumentAttachment($document, $absolutePath);
+            return $document->withLocalCopy(fn (string $localPath) => $this->extractViaDocumentAttachment($document, $localPath));
         }
 
         throw new RuntimeException(

@@ -13,6 +13,14 @@ use InvalidArgumentException;
 
 class LogOutboundCommunicationSender implements OutboundCommunicationSender
 {
+    /**
+     * Keep contact details out of application logs.
+     */
+    protected static function mask(string $recipient): string
+    {
+        return Str::mask($recipient, '*', max(1, (int) floor(strlen($recipient) / 3)));
+    }
+
     public function send(CaseCommunication $communication): array
     {
         $communication->loadMissing('case');
@@ -43,7 +51,7 @@ class LogOutboundCommunicationSender implements OutboundCommunicationSender
 
         Log::info('CareFlow outbound email dispatched.', [
             'communication_uuid' => $communication->uuid,
-            'recipient' => $recipient,
+            'recipient' => self::mask($recipient),
             'provider_reference' => $reference,
             'case_reference' => $communication->case?->reference,
         ]);
@@ -60,25 +68,7 @@ class LogOutboundCommunicationSender implements OutboundCommunicationSender
      */
     protected function sendWhatsApp(CaseCommunication $communication, string $reference): array
     {
-        $recipient = $communication->recipient;
-
-        if (! is_string($recipient) || $recipient === '') {
-            throw new InvalidArgumentException('WhatsApp communications require a recipient phone number.');
-        }
-
-        Log::info('CareFlow outbound WhatsApp message queued via mock provider.', [
-            'communication_uuid' => $communication->uuid,
-            'recipient' => $recipient,
-            'provider_reference' => $reference,
-            'body_preview' => Str::limit((string) $communication->body, 120),
-            'case_reference' => $communication->case?->reference,
-        ]);
-
-        return [
-            'provider' => 'mock_whatsapp',
-            'reference' => $reference,
-            'channel' => CommunicationChannel::WhatsApp->value,
-        ];
+        throw new InvalidArgumentException('WhatsApp sending is not connected. Record WhatsApp conversations as log entries instead.');
     }
 
     /**

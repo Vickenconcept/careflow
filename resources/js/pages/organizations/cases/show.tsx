@@ -1,17 +1,29 @@
-import { Head, Link, useForm } from '@inertiajs/react';
+import { Head, Link, router, useForm } from '@inertiajs/react';
 import {
     Activity,
+    ArrowRight,
+    CalendarCheck,
     CalendarDays,
     FileText,
     Globe2,
+    History,
     Languages,
+    LayoutDashboard,
+    ListChecks,
     Mail,
+    MessageSquare,
     Phone,
+    Plane,
+    ScrollText,
     Stethoscope,
     UserRound,
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
+import { useState } from 'react';
 import type { ReactNode } from 'react';
 import InputError from '@/components/input-error';
+import PageTabs from '@/components/page-tabs';
+import { ToggleField } from '@/components/toggle-field';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -75,6 +87,7 @@ type Props = {
             original_filename: string;
             category: string;
             processing_status: string;
+            ai_review: 'none' | 'unreviewed' | 'reviewed';
             size_bytes: number;
             uploaded_at: string;
             review_url: string;
@@ -353,6 +366,110 @@ type Props = {
     };
 };
 
+type CaseTab =
+    | 'overview'
+    | 'documents'
+    | 'evaluation'
+    | 'communications'
+    | 'proposal'
+    | 'travel'
+    | 'appointments'
+    | 'tasks'
+    | 'timeline';
+
+const TAB_ICONS: Record<CaseTab, LucideIcon> = {
+    overview: LayoutDashboard,
+    documents: FileText,
+    evaluation: Stethoscope,
+    communications: MessageSquare,
+    proposal: ScrollText,
+    travel: Plane,
+    appointments: CalendarCheck,
+    tasks: ListChecks,
+    timeline: History,
+};
+
+const NEXT_STEPS: Record<
+    string,
+    { text: string; tab: CaseTab; cta: string }
+> = {
+    new_enquiry: {
+        text: 'Review the enquiry, assign a coordinator and request medical documents.',
+        tab: 'overview',
+        cta: 'Review enquiry',
+    },
+    awaiting_documents: {
+        text: 'Waiting for the patient to upload documents. Follow up if they are late.',
+        tab: 'communications',
+        cta: 'Contact patient',
+    },
+    documents_received: {
+        text: 'Documents received. Check that each one has been processed.',
+        tab: 'documents',
+        cta: 'Open documents',
+    },
+    ai_processing: {
+        text: 'Documents are being processed. AI results are drafts until reviewed.',
+        tab: 'documents',
+        cta: 'View processing',
+    },
+    awaiting_coordinator_review: {
+        text: 'Review the extracted information, then send the case to a doctor.',
+        tab: 'documents',
+        cta: 'Review documents',
+    },
+    awaiting_doctor_review: {
+        text: 'Doctor evaluation is pending. Assign a doctor if none is set.',
+        tab: 'evaluation',
+        cta: 'Open evaluation',
+    },
+    additional_information_required: {
+        text: 'More information is needed from the patient. Send the request.',
+        tab: 'communications',
+        cta: 'Contact patient',
+    },
+    treatment_proposal_preparation: {
+        text: 'Prepare the administrative treatment proposal.',
+        tab: 'proposal',
+        cta: 'Open proposal',
+    },
+    proposal_sent: {
+        text: 'Proposal sent. Waiting for the patient to respond.',
+        tab: 'communications',
+        cta: 'View messages',
+    },
+    awaiting_patient_response: {
+        text: 'Waiting for the patient to respond. Follow up if needed.',
+        tab: 'communications',
+        cta: 'Contact patient',
+    },
+    appointment_planning: {
+        text: 'Propose and confirm an appointment with the hospital.',
+        tab: 'appointments',
+        cta: 'Plan appointment',
+    },
+    travel_coordination: {
+        text: 'Record the patient travel and accommodation details.',
+        tab: 'travel',
+        cta: 'Open travel',
+    },
+    treatment_scheduled: {
+        text: 'Treatment is scheduled. Confirm travel arrangements are complete.',
+        tab: 'travel',
+        cta: 'Check travel',
+    },
+    treatment_completed: {
+        text: 'Treatment completed. Schedule follow-up actions.',
+        tab: 'tasks',
+        cta: 'Plan follow-up',
+    },
+    follow_up: {
+        text: 'Patient is in follow-up. Complete outstanding follow-up actions.',
+        tab: 'tasks',
+        cta: 'Open follow-ups',
+    },
+};
+
 export default function CaseShow({
     team,
     case: patientCase,
@@ -543,11 +660,103 @@ export default function CaseShow({
         .map((part) => part[0]?.toUpperCase() ?? '')
         .join('');
 
+    const unreviewedDocuments = patientCase.documents.filter(
+        (item) => item.ai_review === 'unreviewed',
+    );
+    const unreviewedDocumentCount = unreviewedDocuments.length;
+    const firstUnreviewedDocument = unreviewedDocuments[0] ?? null;
+
+    const documentsReviewed =
+        patientCase.documents.length > 0 && unreviewedDocumentCount === 0;
+    const readyForDoctor =
+        documentsReviewed && Boolean(patientCase.assignments.doctor);
+    const canSendToDoctor = availableStatusTransitions.some(
+        (item) => item.value === 'awaiting_doctor_review',
+    );
+    const canRequestMoreInfo = availableStatusTransitions.some(
+        (item) => item.value === 'additional_information_required',
+    );
+
+    const openTaskCount =
+        (tasks?.items.filter(
+            (task) => !['completed', 'cancelled'].includes(task.status),
+        ).length ?? 0) +
+        (followUps?.items.filter(
+            (item) => !['completed', 'cancelled'].includes(item.status),
+        ).length ?? 0);
+
+    const visibleTabs: Array<{
+        id: CaseTab;
+        label: string;
+        count?: number;
+    }> = [
+        { id: 'overview', label: 'Overview' },
+        {
+            id: 'documents',
+            label: 'Documents',
+            count: patientCase.documents.length,
+        },
+        ...(permissions.canViewClinical && clinical
+            ? [{ id: 'evaluation' as CaseTab, label: 'Doctor evaluation' }]
+            : []),
+        ...(communications
+            ? [
+                  {
+                      id: 'communications' as CaseTab,
+                      label: 'Communications',
+                      count: communications.items.length,
+                  },
+              ]
+            : []),
+        ...(proposals
+            ? [{ id: 'proposal' as CaseTab, label: 'Treatment proposal' }]
+            : []),
+        ...(travel ? [{ id: 'travel' as CaseTab, label: 'Travel' }] : []),
+        ...(appointments
+            ? [{ id: 'appointments' as CaseTab, label: 'Appointments' }]
+            : []),
+        ...(tasks || followUps
+            ? [
+                  {
+                      id: 'tasks' as CaseTab,
+                      label: 'Tasks & follow-ups',
+                      count: openTaskCount,
+                  },
+              ]
+            : []),
+        { id: 'timeline', label: 'Timeline' },
+    ];
+
+    const [selectedTab, setSelectedTab] = useState<string>(() =>
+        typeof window === 'undefined'
+            ? 'overview'
+            : (new URLSearchParams(window.location.search).get('tab') ??
+              'overview'),
+    );
+    const tab: CaseTab =
+        visibleTabs.find((item) => item.id === selectedTab)?.id ?? 'overview';
+
+    const selectTab = (next: CaseTab): void => {
+        setSelectedTab(next);
+
+        if (typeof window !== 'undefined') {
+            const url = new URL(window.location.href);
+            url.searchParams.set('tab', next);
+            window.history.replaceState(window.history.state, '', url);
+        }
+    };
+
+    const baseNextStep = NEXT_STEPS[patientCase.status] ?? null;
+    const nextStep =
+        baseNextStep && !visibleTabs.some((item) => item.id === baseNextStep.tab)
+            ? { ...baseNextStep, tab: 'overview' as CaseTab, cta: 'Open overview' }
+            : baseNextStep;
+
     return (
         <>
             <Head title={patientCase.reference} />
             <div className="space-y-5 p-4 md:p-6">
-                <section className="rounded-2xl border border-slate-200/80 bg-white px-5 py-5 shadow-[0_12px_40px_-28px_rgba(15,23,42,0.35)] md:px-6">
+                <section className="light-surface rounded-2xl border border-slate-200/80 bg-white px-5 py-5 shadow-[0_12px_40px_-28px_rgba(15,23,42,0.35)] md:px-6">
                     <div className="flex flex-wrap items-start justify-between gap-4">
                         <div className="flex min-w-0 items-start gap-3">
                             <span className="flex size-11 shrink-0 items-center justify-center rounded-full bg-brand/10 text-sm font-semibold text-brand">
@@ -560,7 +769,7 @@ export default function CaseShow({
                                     <h1 className="truncate text-xl font-semibold tracking-tight text-slate-900">
                                         {patientCase.patient.full_name}
                                     </h1>
-                                    <span className="rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-semibold text-blue-700">
+                                    <span className="rounded-full bg-brand/10 px-2.5 py-0.5 text-xs font-semibold text-brand">
                                         {patientCase.status_label}
                                     </span>
                                     <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-600">
@@ -574,18 +783,104 @@ export default function CaseShow({
                                     <span className="font-mono text-brand">
                                         {patientCase.reference}
                                     </span>
+                                    {patientCase.patient.country_of_residence
+                                        ? ` · ${patientCase.patient.country_of_residence}`
+                                        : ''}
+                                    {patientCase.patient.preferred_language
+                                        ? ` · ${patientCase.patient.preferred_language}`
+                                        : ''}
                                     {patientCase.enquiry.department
                                         ? ` · ${patientCase.enquiry.department}`
                                         : ''}
-                                    {patientCase.last_activity_at
-                                        ? ` · Updated ${new Date(patientCase.last_activity_at).toLocaleString()}`
-                                        : ''}
                                 </p>
+                                {patientCase.last_activity_at ? (
+                                    <p className="mt-0.5 text-xs text-slate-500">
+                                        Updated{' '}
+                                        {new Date(
+                                            patientCase.last_activity_at,
+                                        ).toLocaleString()}
+                                    </p>
+                                ) : null}
                             </div>
                         </div>
+                        <dl className="flex flex-wrap gap-x-8 gap-y-2 text-sm">
+                            <div>
+                                <dt className="text-xs font-medium text-slate-500">
+                                    Coordinator
+                                </dt>
+                                <dd className="font-medium text-slate-900">
+                                    {patientCase.assignments.coordinator
+                                        ?.name ?? (
+                                        <span className="text-amber-700">
+                                            Unassigned
+                                        </span>
+                                    )}
+                                </dd>
+                            </div>
+                            <div>
+                                <dt className="text-xs font-medium text-slate-500">
+                                    Doctor
+                                </dt>
+                                <dd className="font-medium text-slate-900">
+                                    {patientCase.assignments.doctor?.name ?? (
+                                        <span className="text-amber-700">
+                                            Unassigned
+                                        </span>
+                                    )}
+                                </dd>
+                            </div>
+                        </dl>
                     </div>
+
+                    {nextStep ? (
+                        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-brand/20 bg-brand/5 px-4 py-3">
+                            <div className="flex min-w-0 items-start gap-2.5">
+                                <ArrowRight className="mt-0.5 size-4 shrink-0 text-brand" />
+                                <div className="min-w-0">
+                                    <p className="text-xs font-semibold tracking-wide text-brand uppercase">
+                                        Next step
+                                    </p>
+                                    <p className="text-sm text-slate-900">
+                                        {nextStep.text}
+                                    </p>
+                                </div>
+                            </div>
+                            {nextStep.tab !== tab ? (
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    className="rounded-full bg-brand text-white hover:bg-brand/90"
+                                    onClick={() => selectTab(nextStep.tab)}
+                                >
+                                    {nextStep.cta}
+                                </Button>
+                            ) : null}
+                        </div>
+                    ) : null}
+
+                    <PageTabs
+                        className="mt-5"
+                        surface="light"
+                        label="Case sections"
+                        idPrefix="case-tab"
+                        panelId="case-tab-panel"
+                        active={tab}
+                        onSelect={(id) => selectTab(id as CaseTab)}
+                        tabs={visibleTabs.map((item) => ({
+                            ...item,
+                            icon: TAB_ICONS[item.id],
+                        }))}
+                    />
                 </section>
 
+                <div
+                    id="case-tab-panel"
+                    role="tabpanel"
+                    aria-labelledby={`case-tab-${tab}`}
+                    className="space-y-5"
+                >
+
+                {tab === 'overview' && (<>
                 {(permissions.canUpdateStatus ||
                     permissions.canAssignCases) && (
                     <section className="grid gap-4 lg:grid-cols-2">
@@ -861,12 +1156,140 @@ export default function CaseShow({
                         </div>
                     </Card>
                 </section>
+                </>)}
 
+                {tab === 'documents' && (<>
                 <Card
                     title="Documents"
                     description={`${patientCase.documents.length} uploaded`}
                     icon={FileText}
                 >
+                    {patientCase.status === 'awaiting_coordinator_review' &&
+                    permissions.canUpdateStatus ? (
+                        <div className="space-y-3 rounded-xl border border-brand/20 bg-brand/5 px-4 py-4">
+                            <div>
+                                <p className="text-sm font-semibold text-slate-900">
+                                    Ready for doctor review?
+                                </p>
+                                <p className="text-xs text-slate-500">
+                                    Check the AI drafts, make sure a doctor is
+                                    assigned, then send the case on.
+                                </p>
+                            </div>
+                            <ul className="space-y-1.5 text-sm">
+                                <li className="flex items-center gap-2">
+                                    <span
+                                        className={
+                                            documentsReviewed
+                                                ? 'text-emerald-600'
+                                                : 'text-amber-600'
+                                        }
+                                        aria-hidden="true"
+                                    >
+                                        {documentsReviewed ? '✓' : '○'}
+                                    </span>
+                                    {patientCase.documents.length === 0
+                                        ? 'No documents uploaded'
+                                        : unreviewedDocumentCount === 0
+                                          ? 'All AI drafts have been reviewed'
+                                          : `${unreviewedDocumentCount} AI ${unreviewedDocumentCount === 1 ? 'draft needs' : 'drafts need'} review`}
+                                </li>
+                                <li className="flex items-center gap-2">
+                                    <span
+                                        className={
+                                            patientCase.assignments.doctor
+                                                ? 'text-emerald-600'
+                                                : 'text-amber-600'
+                                        }
+                                        aria-hidden="true"
+                                    >
+                                        {patientCase.assignments.doctor
+                                            ? '✓'
+                                            : '○'}
+                                    </span>
+                                    {patientCase.assignments.doctor
+                                        ? `Doctor assigned: ${patientCase.assignments.doctor.name}`
+                                        : 'No doctor assigned yet'}
+                                    {!patientCase.assignments.doctor &&
+                                    permissions.canAssignCases ? (
+                                        <button
+                                            type="button"
+                                            className="text-brand underline-offset-2 hover:underline"
+                                            onClick={() => selectTab('overview')}
+                                        >
+                                            Assign a doctor
+                                        </button>
+                                    ) : null}
+                                </li>
+                            </ul>
+                            <div className="flex flex-wrap gap-2">
+                                {canSendToDoctor ? (
+                                    <Button
+                                        type="button"
+                                        className="rounded-full bg-brand text-white hover:bg-brand/90"
+                                        disabled={
+                                            !readyForDoctor ||
+                                            statusForm.processing
+                                        }
+                                        onClick={() =>
+                                            router.patch(
+                                                `/${team.slug}/cases/${patientCase.reference}/status`,
+                                                {
+                                                    status: 'awaiting_doctor_review',
+                                                    note: 'Coordinator review complete. Sent to doctor review.',
+                                                },
+                                                { preserveScroll: true },
+                                            )
+                                        }
+                                    >
+                                        Send to doctor review
+                                    </Button>
+                                ) : null}
+                                {canRequestMoreInfo ? (
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        className="rounded-full"
+                                        onClick={() =>
+                                            router.patch(
+                                                `/${team.slug}/cases/${patientCase.reference}/status`,
+                                                {
+                                                    status: 'additional_information_required',
+                                                    note: 'Coordinator requested additional information.',
+                                                },
+                                                { preserveScroll: true },
+                                            )
+                                        }
+                                    >
+                                        Request more information
+                                    </Button>
+                                ) : null}
+                            </div>
+                            {!readyForDoctor && canSendToDoctor ? (
+                                <p className="text-xs text-slate-500">
+                                    Complete the checks above to enable sending
+                                    to a doctor.
+                                </p>
+                            ) : null}
+                        </div>
+                    ) : null}
+                    {firstUnreviewedDocument ? (
+                        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                            <span>
+                                {unreviewedDocumentCount}{' '}
+                                {unreviewedDocumentCount === 1
+                                    ? 'document has'
+                                    : 'documents have'}{' '}
+                                an AI draft waiting for review. Drafts are not
+                                clinically approved.
+                            </span>
+                            <Button asChild size="sm" className="rounded-full">
+                                <Link href={firstUnreviewedDocument.review_url}>
+                                    Start reviewing
+                                </Link>
+                            </Button>
+                        </div>
+                    ) : null}
                     {patientCase.documents.length === 0 ? (
                         <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/70 px-4 py-8 text-center text-sm text-slate-500">
                             No documents uploaded yet.
@@ -888,6 +1311,18 @@ export default function CaseShow({
                                         <div className="mt-0.5 text-xs text-slate-500">
                                             {document.category} ·{' '}
                                             {document.processing_status}
+                                            {document.ai_review ===
+                                            'unreviewed' ? (
+                                                <span className="ms-2 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 font-semibold text-amber-800">
+                                                    AI draft · needs review
+                                                </span>
+                                            ) : null}
+                                            {document.ai_review ===
+                                            'reviewed' ? (
+                                                <span className="ms-2 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 font-semibold text-emerald-700">
+                                                    Reviewed
+                                                </span>
+                                            ) : null}
                                         </div>
                                     </div>
                                     <div className="text-xs text-slate-500">
@@ -901,7 +1336,9 @@ export default function CaseShow({
                         </ul>
                     )}
                 </Card>
+                </>)}
 
+                {tab === 'evaluation' && (<>
                 {permissions.canViewClinical && clinical ? (
                     <Card title="Clinical review">
                         <p className="text-sm text-amber-800">
@@ -1411,7 +1848,9 @@ export default function CaseShow({
                         ) : null}
                     </Card>
                 ) : null}
+                </>)}
 
+                {tab === 'proposal' && (<>
                 {proposals ? (
                     <Card title="Treatment proposals">
                         <p className="text-sm text-amber-800">
@@ -1872,7 +2311,9 @@ export default function CaseShow({
                         ) : null}
                     </Card>
                 ) : null}
+                </>)}
 
+                {tab === 'appointments' && (<>
                 {appointments ? (
                     <Card title="Appointments">
                         <p className="text-sm text-amber-800">
@@ -2226,7 +2667,9 @@ export default function CaseShow({
                         ) : null}
                     </Card>
                 ) : null}
+                </>)}
 
+                {tab === 'travel' && (<>
                 {travel ? (
                     <Card title="Travel coordination">
                         <p className="text-sm text-amber-800">
@@ -2396,6 +2839,38 @@ export default function CaseShow({
                                             }
                                         />
                                     </div>
+                                    <div className="grid gap-3 lg:col-span-2">
+                                        <ToggleField
+                                            id="travel-airport-pickup"
+                                            label="Airport pickup needed"
+                                            description="Arrange a transfer from the airport when the patient lands."
+                                            checked={travelForm.data.airport_pickup_required}
+                                            onChange={(value) =>
+                                                travelForm.setData(
+                                                    'airport_pickup_required',
+                                                    value,
+                                                )
+                                            }
+                                        />
+                                        {travelForm.data.airport_pickup_required ? (
+                                            <div className="grid gap-2">
+                                                <Label htmlFor="travel-pickup-details">
+                                                    Pickup details
+                                                </Label>
+                                                <Input
+                                                    id="travel-pickup-details"
+                                                    placeholder="Driver, meeting point, flight number to watch…"
+                                                    value={travelForm.data.airport_pickup_details}
+                                                    onChange={(event) =>
+                                                        travelForm.setData(
+                                                            'airport_pickup_details',
+                                                            event.target.value,
+                                                        )
+                                                    }
+                                                />
+                                            </div>
+                                        ) : null}
+                                    </div>
                                     <div className="grid gap-2 lg:col-span-2">
                                         <Label>Hotel / accommodation</Label>
                                         <Input
@@ -2425,7 +2900,9 @@ export default function CaseShow({
                         ) : null}
                     </Card>
                 ) : null}
+                </>)}
 
+                {tab === 'tasks' && (<>
                 {tasks || followUps ? (
                     <section className="grid gap-4 lg:grid-cols-2">
                 {tasks ? (
@@ -2881,7 +3358,9 @@ export default function CaseShow({
                 ) : null}
                     </section>
                 ) : null}
+                </>)}
 
+                {tab === 'communications' && (<>
                 {communications ? (
                     <Card title="Communications">
                         <p className="text-sm text-amber-800">
@@ -3005,22 +3484,19 @@ export default function CaseShow({
                                             </SelectContent>
                                         </Select>
                                     </div>
-                                    <label className="flex items-center gap-2 self-end text-sm">
-                                        <input
-                                            type="checkbox"
-                                            className="size-4 rounded border"
-                                            checked={
-                                                communicationForm.data.log_only
-                                            }
-                                            onChange={(event) =>
-                                                communicationForm.setData(
-                                                    'log_only',
-                                                    event.target.checked,
-                                                )
-                                            }
-                                        />
-                                        Log only (no external send)
-                                    </label>
+                                    <ToggleField
+                                        id="communication-log-only"
+                                        className="self-end"
+                                        label="Log only"
+                                        description="Keep a record here without sending anything to the patient."
+                                        checked={communicationForm.data.log_only}
+                                        onChange={(value) =>
+                                            communicationForm.setData(
+                                                'log_only',
+                                                value,
+                                            )
+                                        }
+                                    />
                                     <div className="grid gap-2 lg:col-span-2">
                                         <Label>Body</Label>
                                         <Textarea
@@ -3035,6 +3511,14 @@ export default function CaseShow({
                                         />
                                     </div>
                                 </div>
+                                {communicationForm.data.channel ===
+                                'patient_portal' ? (
+                                    <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                                        {communicationForm.data.log_only
+                                            ? 'Log-only messages are never shown to the patient.'
+                                            : 'Once approved, this message appears on the patient’s private tracking page. Do not include clinical advice or diagnoses.'}
+                                    </p>
+                                ) : null}
                                 <InputError
                                     message={
                                         communicationForm.errors.body ||
@@ -3052,7 +3536,9 @@ export default function CaseShow({
                         ) : null}
                     </Card>
                 ) : null}
+                </>)}
 
+                {tab === 'timeline' && (<>
                 <Card
                     title="Activity timeline"
                     description="Recent case events"
@@ -3091,6 +3577,8 @@ export default function CaseShow({
                         </ol>
                     )}
                 </Card>
+                </>)}
+                </div>
             </div>
         </>
     );
@@ -3108,7 +3596,7 @@ function Card({
     children: ReactNode;
 }) {
     return (
-        <section className="rounded-2xl border border-slate-200/80 bg-white shadow-[0_12px_40px_-28px_rgba(15,23,42,0.35)]">
+        <section className="light-surface rounded-2xl border border-slate-200/80 bg-white shadow-[0_12px_40px_-28px_rgba(15,23,42,0.35)]">
             <div className="flex items-center gap-2.5 border-b border-slate-100 px-5 py-3.5">
                 {Icon ? (
                     <span className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-brand/10 text-brand">

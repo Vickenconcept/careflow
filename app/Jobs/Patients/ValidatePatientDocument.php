@@ -8,7 +8,6 @@ use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Storage;
 use Throwable;
 
 class ValidatePatientDocument implements ShouldBeUnique, ShouldQueue
@@ -55,7 +54,7 @@ class ValidatePatientDocument implements ShouldBeUnique, ShouldQueue
             'processing_error' => null,
         ]);
 
-        if (! Storage::disk($document->disk)->exists($document->path)) {
+        if (! $document->filesystem()->exists($document->path)) {
             $document->update([
                 'processing_status' => DocumentProcessingStatus::Failed,
                 'processing_error' => 'Stored file is missing from private storage.',

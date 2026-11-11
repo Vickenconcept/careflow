@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import type { MouseEvent, ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 
 export function DataTableCard({
@@ -67,14 +67,18 @@ export function DataTableBody({ children }: { children: ReactNode }) {
 export function DataTableRow({
     children,
     className,
+    onClick,
 }: {
     children: ReactNode;
     className?: string;
+    onClick?: (event: MouseEvent<HTMLTableRowElement>) => void;
 }) {
     return (
         <tr
+            onClick={onClick}
             className={cn(
                 'border-b border-slate-100 transition-colors last:border-b-0 hover:bg-slate-50/80',
+                onClick && 'cursor-pointer',
                 className,
             )}
         >

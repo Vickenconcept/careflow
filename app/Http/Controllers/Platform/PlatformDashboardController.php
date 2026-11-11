@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Platform;
 
 use App\Enums\TeamRole;
 use App\Http\Controllers\Controller;
+use App\Models\OrganizationSetting;
 use App\Models\PatientCase;
 use App\Models\Team;
 use App\Models\User;
@@ -18,7 +19,7 @@ class PlatformDashboardController extends Controller
 
         $organizations = Team::query()
             ->withCount(['members', 'departments', 'patientCases'])
-            ->with(['members' => fn ($query) => $query
+            ->with(['organizationSetting', 'members' => fn ($query) => $query
                 ->orderBy('name')
                 ->limit(25)])
             ->orderBy('name')
@@ -31,6 +32,10 @@ class PlatformDashboardController extends Controller
                 'members_count' => $team->members_count,
                 'departments_count' => $team->departments_count,
                 'cases_count' => $team->patient_cases_count,
+                'plan_label' => OrganizationSetting::plans()[$team->organizationSetting?->plan ?? 'trial'] ?? 'Trial',
+                'subscription_status' => $team->organizationSetting?->subscription_status ?? 'active',
+                'seat_limit' => $team->organizationSetting?->seat_limit,
+                'usage' => PlatformOrganizationController::usageFor($team),
                 'members' => $team->members->map(function (User $member) {
                     $role = $this->membershipRole($member->pivot->role);
 

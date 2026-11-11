@@ -33,6 +33,7 @@ enum CaseActivityType: string
     case FollowUpScheduled = 'follow_up_scheduled';
     case FollowUpUpdated = 'follow_up_updated';
     case FollowUpCompleted = 'follow_up_completed';
+    case DataRetentionAction = 'data_retention_action';
 
     public function label(): string
     {
@@ -66,6 +67,7 @@ enum CaseActivityType: string
             self::FollowUpScheduled => 'Follow-up scheduled',
             self::FollowUpUpdated => 'Follow-up updated',
             self::FollowUpCompleted => 'Follow-up completed',
+            self::DataRetentionAction => 'Data retention action',
         };
     }
 }

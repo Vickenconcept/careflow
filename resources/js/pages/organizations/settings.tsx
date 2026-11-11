@@ -1,9 +1,23 @@
-import { Head, useForm } from '@inertiajs/react';
-import Heading from '@/components/heading';
+import { Head, router, useForm, usePage } from '@inertiajs/react';
+import {
+    Bot,
+    Building2,
+    FileScan,
+    Globe2,
+    ImageIcon,
+    Palette,
+    Sparkles,
+    Trash2,
+    Upload,
+} from 'lucide-react';
+import { useRef, type ReactNode } from 'react';
 import InputError from '@/components/input-error';
+import OrganizationTabs from '@/components/organization-tabs';
+import { SettingToggle } from '@/components/setting-toggle';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { cn } from '@/lib/utils';
 import { dashboard } from '@/routes';
 import type { OrganizationSettings, Team } from '@/types';
 
@@ -19,15 +33,171 @@ type Props = {
         canManageOrganizationSettings: boolean;
     };
     languageOptions: LanguageOption[];
+    logoUrl: string | null;
 };
+
+function Section({
+    icon: Icon,
+    title,
+    description,
+    children,
+}: {
+    icon: typeof Building2;
+    title: string;
+    description: string;
+    children: ReactNode;
+}) {
+    return (
+        <section className="overflow-hidden rounded-xl border border-border bg-card">
+            <div className="flex items-start gap-3 border-b border-border px-5 py-4">
+                <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-brand/10 text-brand">
+                    <Icon className="size-4" />
+                </span>
+                <div>
+                    <h2 className="text-sm font-semibold">{title}</h2>
+                    <p className="text-xs text-muted-foreground">
+                        {description}
+                    </p>
+                </div>
+            </div>
+            <div className="p-5">{children}</div>
+        </section>
+    );
+}
+
+function Field({
+    id,
+    label,
+    error,
+    className,
+    children,
+}: {
+    id: string;
+    label: string;
+    error?: string;
+    className?: string;
+    children: ReactNode;
+}) {
+    return (
+        <div className={cn('grid gap-1.5', className)}>
+            <Label htmlFor={id}>{label}</Label>
+            {children}
+            <InputError message={error} />
+        </div>
+    );
+}
+
+function ColorField({
+    id,
+    label,
+    value,
+    fallback,
+    disabled,
+    error,
+    onChange,
+}: {
+    id: string;
+    label: string;
+    value: string;
+    fallback: string;
+    disabled: boolean;
+    error?: string;
+    onChange: (value: string) => void;
+}) {
+    const valid = /^#[0-9a-fA-F]{6}$/.test(value);
+
+    return (
+        <Field id={id} label={label} error={error}>
+            <div className="flex items-center gap-2">
+                <input
+                    type="color"
+                    aria-label={`${label} picker`}
+                    value={valid ? value : fallback}
+                    disabled={disabled}
+                    onChange={(event) => onChange(event.target.value.toUpperCase())}
+                    className="size-9 shrink-0 cursor-pointer rounded-md border border-input bg-transparent p-1 disabled:cursor-not-allowed disabled:opacity-60"
+                />
+                <Input
+                    id={id}
+                    value={value}
+                    onChange={(event) => onChange(event.target.value)}
+                    disabled={disabled}
+                    placeholder={fallback}
+                    className="font-mono"
+                />
+            </div>
+        </Field>
+    );
+}
+
+function AiFeatures({
+    team,
+    settings,
+    canEdit,
+}: {
+    team: Props['team'];
+    settings: OrganizationSettings;
+    canEdit: boolean;
+}) {
+    const toggle = (field: 'ai_processing_enabled' | 'assistant_enabled', value: boolean) =>
+        router.patch(`/${team.slug}/organization/ai`, { [field]: value }, { preserveScroll: true });
+
+    return (
+        <Section
+            icon={Sparkles}
+            title="AI features"
+            description="Each switch takes effect straight away for everyone in this hospital. Provider: OpenAI."
+        >
+            <div className="space-y-3">
+                <SettingToggle
+                    id="ai_processing_enabled"
+                    icon={FileScan}
+                    title="AI document processing"
+                    description="Reads, translates and summarises patient documents. It only runs when the patient has also given AI consent, and results are always drafts for staff to review."
+                    checked={settings.ai_processing_enabled}
+                    disabled={!canEdit}
+                    onChange={(value) => toggle('ai_processing_enabled', value)}
+                />
+                <SettingToggle
+                    id="assistant_enabled"
+                    icon={Bot}
+                    title={`AI assistant (${settings.assistant_name})`}
+                    description={
+                        <>
+                            The command center and chat bubble for staff. It only
+                            sees what each person can already see, and every
+                            action waits for approval.{' '}
+                            <a
+                                href={`/${team.slug}/assistant`}
+                                className="font-medium text-brand hover:underline"
+                            >
+                                Open the command center
+                            </a>
+                        </>
+                    }
+                    checked={settings.assistant_enabled}
+                    disabled={!canEdit}
+                    onChange={(value) => toggle('assistant_enabled', value)}
+                />
+            </div>
+            <p className="mt-3 text-xs text-muted-foreground">
+                Turn these on once your hospital has approved sending patient
+                information to the AI provider.
+            </p>
+        </Section>
+    );
+}
 
 export default function OrganizationSettingsPage({
     team,
     settings,
     permissions,
     languageOptions,
+    logoUrl,
 }: Props) {
     const canEdit = permissions.canManageOrganizationSettings;
+    const logoError = usePage().props.errors?.logo as string | undefined;
+    const fileInput = useRef<HTMLInputElement>(null);
 
     const form = useForm({
         legal_name: settings.legal_name ?? '',
@@ -45,414 +215,285 @@ export default function OrganizationSettingsPage({
         supported_languages: settings.supported_languages,
         brand_primary_color: settings.brand_primary_color ?? '',
         brand_secondary_color: settings.brand_secondary_color ?? '',
-        ai_processing_enabled: settings.ai_processing_enabled,
-        ai_provider: settings.ai_provider || 'openai',
     });
 
-    const toggleLanguage = (language: string, checked: boolean) => {
-        const next = checked
-            ? [...form.data.supported_languages, language]
-            : form.data.supported_languages.filter(
-                  (value) => value !== language,
-              );
+    const text = (key: keyof typeof form.data) => ({
+        id: key,
+        value: String(form.data[key] ?? ''),
+        disabled: !canEdit,
+        onChange: (event: { target: { value: string } }) =>
+            form.setData(key, event.target.value as never),
+    });
 
-        form.setData('supported_languages', next);
+    const toggleLanguage = (language: string) => {
+        const current = form.data.supported_languages;
+
+        form.setData(
+            'supported_languages',
+            current.includes(language)
+                ? current.filter((value) => value !== language)
+                : [...current, language],
+        );
     };
 
     return (
         <>
             <Head title={`${team.name} settings`} />
+            <OrganizationTabs />
 
-            <div className="flex flex-col space-y-8">
-                <Heading
-                    title="Organization settings"
-                    description="Hospital profile, localization, branding, and AI processing configuration."
-                />
+            <form
+                className="mx-auto max-w-4xl space-y-5 p-4 pb-28 md:p-6 md:pb-28"
+                onSubmit={(event) => {
+                    event.preventDefault();
 
-                <form
-                    className="space-y-8"
-                    onSubmit={(event) => {
-                        event.preventDefault();
-                        if (!canEdit) {
-                            return;
-                        }
+                    if (canEdit) {
+                        form.patch(`/${team.slug}/organization/settings`, {
+                            preserveScroll: true,
+                        });
+                    }
+                }}
+            >
+                <header className="space-y-1">
+                    <h1 className="text-2xl font-semibold tracking-tight">
+                        Profile &amp; branding
+                    </h1>
+                    <p className="text-sm text-muted-foreground">
+                        How {team.name} appears to patients, which languages it
+                        supports, and which AI features are switched on.
+                    </p>
+                </header>
 
-                        form.patch(
-                            `/` +
-                                team.slug +
-                                `/organization/settings`,
-                            { preserveScroll: true },
-                        );
-                    }}
+                <AiFeatures team={team} settings={settings} canEdit={canEdit} />
+
+                <Section
+                    icon={ImageIcon}
+                    title="Logo"
+                    description="Shown to patients on the intake and tracking pages."
                 >
-                    <section className="space-y-4">
-                        <h2 className="text-base font-medium">Profile</h2>
-                        <div className="grid gap-4 md:grid-cols-2">
-                            <div className="grid gap-2">
-                                <Label htmlFor="legal_name">Legal name</Label>
-                                <Input
-                                    id="legal_name"
-                                    value={form.data.legal_name}
-                                    onChange={(event) =>
-                                        form.setData(
-                                            'legal_name',
-                                            event.target.value,
-                                        )
-                                    }
-                                    disabled={!canEdit}
+                    <div className="flex flex-wrap items-center gap-5">
+                        <div className="flex size-24 items-center justify-center overflow-hidden rounded-2xl border border-dashed border-border bg-muted/40">
+                            {logoUrl ? (
+                                <img
+                                    src={logoUrl}
+                                    alt={`${team.name} logo`}
+                                    className="max-h-full max-w-full object-contain p-2"
                                 />
-                                <InputError message={form.errors.legal_name} />
-                            </div>
-                            <div className="grid gap-2">
-                                <Label htmlFor="contact_email">
-                                    Contact email
-                                </Label>
-                                <Input
-                                    id="contact_email"
-                                    type="email"
-                                    value={form.data.contact_email}
-                                    onChange={(event) =>
-                                        form.setData(
-                                            'contact_email',
-                                            event.target.value,
-                                        )
-                                    }
-                                    disabled={!canEdit}
-                                />
-                                <InputError
-                                    message={form.errors.contact_email}
-                                />
-                            </div>
-                            <div className="grid gap-2">
-                                <Label htmlFor="contact_phone">
-                                    Contact phone
-                                </Label>
-                                <Input
-                                    id="contact_phone"
-                                    value={form.data.contact_phone}
-                                    onChange={(event) =>
-                                        form.setData(
-                                            'contact_phone',
-                                            event.target.value,
-                                        )
-                                    }
-                                    disabled={!canEdit}
-                                />
-                                <InputError
-                                    message={form.errors.contact_phone}
-                                />
-                            </div>
-                            <div className="grid gap-2">
-                                <Label htmlFor="country">Country (ISO)</Label>
-                                <Input
-                                    id="country"
-                                    maxLength={2}
-                                    value={form.data.country}
-                                    onChange={(event) =>
-                                        form.setData(
-                                            'country',
-                                            event.target.value.toUpperCase(),
-                                        )
-                                    }
-                                    disabled={!canEdit}
-                                />
-                                <InputError message={form.errors.country} />
-                            </div>
-                            <div className="grid gap-2 md:col-span-2">
-                                <Label htmlFor="address_line_1">
-                                    Address line 1
-                                </Label>
-                                <Input
-                                    id="address_line_1"
-                                    value={form.data.address_line_1}
-                                    onChange={(event) =>
-                                        form.setData(
-                                            'address_line_1',
-                                            event.target.value,
-                                        )
-                                    }
-                                    disabled={!canEdit}
-                                />
-                                <InputError
-                                    message={form.errors.address_line_1}
-                                />
-                            </div>
-                            <div className="grid gap-2 md:col-span-2">
-                                <Label htmlFor="address_line_2">
-                                    Address line 2
-                                </Label>
-                                <Input
-                                    id="address_line_2"
-                                    value={form.data.address_line_2}
-                                    onChange={(event) =>
-                                        form.setData(
-                                            'address_line_2',
-                                            event.target.value,
-                                        )
-                                    }
-                                    disabled={!canEdit}
-                                />
-                                <InputError
-                                    message={form.errors.address_line_2}
-                                />
-                            </div>
-                            <div className="grid gap-2">
-                                <Label htmlFor="city">City</Label>
-                                <Input
-                                    id="city"
-                                    value={form.data.city}
-                                    onChange={(event) =>
-                                        form.setData('city', event.target.value)
-                                    }
-                                    disabled={!canEdit}
-                                />
-                                <InputError message={form.errors.city} />
-                            </div>
-                            <div className="grid gap-2">
-                                <Label htmlFor="state">State</Label>
-                                <Input
-                                    id="state"
-                                    value={form.data.state}
-                                    onChange={(event) =>
-                                        form.setData(
-                                            'state',
-                                            event.target.value,
-                                        )
-                                    }
-                                    disabled={!canEdit}
-                                />
-                                <InputError message={form.errors.state} />
-                            </div>
-                            <div className="grid gap-2">
-                                <Label htmlFor="postal_code">
-                                    Postal code
-                                </Label>
-                                <Input
-                                    id="postal_code"
-                                    value={form.data.postal_code}
-                                    onChange={(event) =>
-                                        form.setData(
-                                            'postal_code',
-                                            event.target.value,
-                                        )
-                                    }
-                                    disabled={!canEdit}
-                                />
-                                <InputError
-                                    message={form.errors.postal_code}
-                                />
-                            </div>
+                            ) : (
+                                <ImageIcon className="size-7 text-muted-foreground/50" />
+                            )}
                         </div>
-                    </section>
+                        {canEdit ? (
+                            <div className="space-y-2">
+                                <input
+                                    ref={fileInput}
+                                    type="file"
+                                    hidden
+                                    accept="image/png,image/jpeg,image/webp"
+                                    aria-label="Upload logo"
+                                    onChange={(event) => {
+                                        const file = event.target.files?.[0];
 
-                    <section className="space-y-4">
-                        <h2 className="text-base font-medium">Localization</h2>
-                        <div className="grid gap-4 md:grid-cols-3">
-                            <div className="grid gap-2">
-                                <Label htmlFor="timezone">Timezone</Label>
-                                <Input
-                                    id="timezone"
-                                    value={form.data.timezone}
-                                    onChange={(event) =>
-                                        form.setData(
-                                            'timezone',
-                                            event.target.value,
-                                        )
-                                    }
-                                    disabled={!canEdit}
-                                    required
-                                />
-                                <InputError message={form.errors.timezone} />
-                            </div>
-                            <div className="grid gap-2">
-                                <Label htmlFor="default_currency">
-                                    Default currency
-                                </Label>
-                                <Input
-                                    id="default_currency"
-                                    maxLength={3}
-                                    value={form.data.default_currency}
-                                    onChange={(event) =>
-                                        form.setData(
-                                            'default_currency',
-                                            event.target.value.toUpperCase(),
-                                        )
-                                    }
-                                    disabled={!canEdit}
-                                    required
-                                />
-                                <InputError
-                                    message={form.errors.default_currency}
-                                />
-                            </div>
-                            <div className="grid gap-2">
-                                <Label htmlFor="default_language">
-                                    Default language
-                                </Label>
-                                <Input
-                                    id="default_language"
-                                    value={form.data.default_language}
-                                    onChange={(event) =>
-                                        form.setData(
-                                            'default_language',
-                                            event.target.value,
-                                        )
-                                    }
-                                    disabled={!canEdit}
-                                    required
-                                />
-                                <InputError
-                                    message={form.errors.default_language}
-                                />
-                            </div>
-                        </div>
-                        <div className="space-y-3">
-                            <Label>Supported patient languages</Label>
-                            <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3">
-                                {languageOptions.map((language) => {
-                                    const checked =
-                                        form.data.supported_languages.includes(
-                                            language.value,
-                                        );
+                                        if (file) {
+                                            router.post(
+                                                `/${team.slug}/organization/logo`,
+                                                { logo: file },
+                                                {
+                                                    forceFormData: true,
+                                                    preserveScroll: true,
+                                                },
+                                            );
+                                        }
 
-                                    return (
-                                        <label
-                                            key={language.value}
-                                            className="flex items-center gap-2 text-sm"
+                                        event.target.value = '';
+                                    }}
+                                />
+                                <div className="flex flex-wrap gap-2">
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => fileInput.current?.click()}
+                                    >
+                                        <Upload className="size-4" />
+                                        {logoUrl ? 'Replace logo' : 'Upload logo'}
+                                    </Button>
+                                    {logoUrl ? (
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="sm"
+                                            className="text-destructive"
+                                            onClick={() =>
+                                                router.delete(
+                                                    `/${team.slug}/organization/logo`,
+                                                    { preserveScroll: true },
+                                                )
+                                            }
                                         >
-                                            <input
-                                                type="checkbox"
-                                                className="size-4 rounded border"
-                                                checked={checked}
-                                                disabled={!canEdit}
-                                                onChange={(event) =>
-                                                    toggleLanguage(
-                                                        language.value,
-                                                        event.target.checked,
-                                                    )
-                                                }
-                                            />
-                                            {language.label}
-                                        </label>
-                                    );
-                                })}
+                                            <Trash2 className="size-4" />
+                                            Remove
+                                        </Button>
+                                    ) : null}
+                                </div>
+                                <p className="text-xs text-muted-foreground">
+                                    PNG, JPG or WebP, up to 1 MB.
+                                </p>
                             </div>
-                            <InputError
-                                message={form.errors.supported_languages}
-                            />
-                        </div>
-                    </section>
+                        ) : null}
+                    </div>
+                    <InputError message={logoError} className="mt-2" />
+                </Section>
 
-                    <section className="space-y-4">
-                        <h2 className="text-base font-medium">Branding</h2>
-                        <div className="grid gap-4 md:grid-cols-2">
-                            <div className="grid gap-2">
-                                <Label htmlFor="brand_primary_color">
-                                    Primary color
-                                </Label>
-                                <Input
-                                    id="brand_primary_color"
-                                    value={form.data.brand_primary_color}
-                                    onChange={(event) =>
-                                        form.setData(
-                                            'brand_primary_color',
-                                            event.target.value,
-                                        )
-                                    }
-                                    disabled={!canEdit}
-                                    placeholder="#2F6FED"
-                                />
-                                <InputError
-                                    message={form.errors.brand_primary_color}
-                                />
-                            </div>
-                            <div className="grid gap-2">
-                                <Label htmlFor="brand_secondary_color">
-                                    Secondary color
-                                </Label>
-                                <Input
-                                    id="brand_secondary_color"
-                                    value={form.data.brand_secondary_color}
-                                    onChange={(event) =>
-                                        form.setData(
-                                            'brand_secondary_color',
-                                            event.target.value,
-                                        )
-                                    }
-                                    disabled={!canEdit}
-                                    placeholder="#134E4A"
-                                />
-                                <InputError
-                                    message={form.errors.brand_secondary_color}
-                                />
-                            </div>
-                        </div>
-                    </section>
-
-                    <section className="space-y-4">
-                        <h2 className="text-base font-medium">
-                            AI configuration
-                        </h2>
-                        <p className="text-sm text-muted-foreground">
-                            Live processing uses{' '}
-                            <code>CAREFLOW_AI_PROVIDER=openai</code> and{' '}
-                            <code>OPENAI_API_KEY</code>. Keep a queue worker
-                            running (<code>php artisan queue:work</code> or{' '}
-                            <code>composer run dev</code>). Do not send real
-                            patient documents to OpenAI without approved
-                            safeguards.
-                        </p>
-                        <label className="flex items-center gap-2 text-sm">
-                            <input
-                                type="checkbox"
-                                className="size-4 rounded border"
-                                checked={form.data.ai_processing_enabled}
-                                disabled={!canEdit}
+                <Section
+                    icon={Building2}
+                    title="Hospital profile"
+                    description="Contact details and address."
+                >
+                    <div className="grid gap-4 md:grid-cols-2">
+                        <Field id="legal_name" label="Legal name" error={form.errors.legal_name}>
+                            <Input {...text('legal_name')} />
+                        </Field>
+                        <Field id="contact_email" label="Contact email" error={form.errors.contact_email}>
+                            <Input type="email" {...text('contact_email')} />
+                        </Field>
+                        <Field id="contact_phone" label="Contact phone" error={form.errors.contact_phone}>
+                            <Input {...text('contact_phone')} />
+                        </Field>
+                        <Field id="country" label="Country code" error={form.errors.country}>
+                            <Input
+                                {...text('country')}
+                                maxLength={2}
+                                placeholder="TR"
                                 onChange={(event) =>
-                                    form.setData(
-                                        'ai_processing_enabled',
-                                        event.target.checked,
-                                    )
+                                    form.setData('country', event.target.value.toUpperCase())
                                 }
                             />
-                            Enable AI document processing
-                        </label>
-                        <InputError
-                            message={form.errors.ai_processing_enabled}
+                        </Field>
+                        <Field id="address_line_1" label="Address" className="md:col-span-2" error={form.errors.address_line_1}>
+                            <Input {...text('address_line_1')} />
+                        </Field>
+                        <Field id="address_line_2" label="Address line 2" className="md:col-span-2" error={form.errors.address_line_2}>
+                            <Input {...text('address_line_2')} />
+                        </Field>
+                        <div className="grid gap-4 md:col-span-2 md:grid-cols-3">
+                            <Field id="city" label="City" error={form.errors.city}>
+                                <Input {...text('city')} />
+                            </Field>
+                            <Field id="state" label="State / region" error={form.errors.state}>
+                                <Input {...text('state')} />
+                            </Field>
+                            <Field id="postal_code" label="Postal code" error={form.errors.postal_code}>
+                                <Input {...text('postal_code')} />
+                            </Field>
+                        </div>
+                    </div>
+                </Section>
+
+                <Section
+                    icon={Globe2}
+                    title="Language & region"
+                    description="Defaults for dates, prices and the patient portal."
+                >
+                    <div className="grid gap-4 md:grid-cols-3">
+                        <Field id="timezone" label="Timezone" error={form.errors.timezone}>
+                            <Input {...text('timezone')} required placeholder="Europe/Istanbul" />
+                        </Field>
+                        <Field id="default_currency" label="Currency" error={form.errors.default_currency}>
+                            <Input
+                                {...text('default_currency')}
+                                required
+                                maxLength={3}
+                                placeholder="USD"
+                                onChange={(event) =>
+                                    form.setData('default_currency', event.target.value.toUpperCase())
+                                }
+                            />
+                        </Field>
+                        <Field id="default_language" label="Staff working language" error={form.errors.default_language}>
+                            <Input {...text('default_language')} required placeholder="en" />
+                        </Field>
+                    </div>
+
+                    <div className="mt-5 space-y-2.5">
+                        <Label>Languages patients can use</Label>
+                        <div className="flex flex-wrap gap-2">
+                            {languageOptions.map((language) => {
+                                const active = form.data.supported_languages.includes(language.value);
+
+                                return (
+                                    <button
+                                        key={language.value}
+                                        type="button"
+                                        aria-pressed={active}
+                                        disabled={!canEdit}
+                                        onClick={() => toggleLanguage(language.value)}
+                                        className={cn(
+                                            'rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60',
+                                            active
+                                                ? 'border-brand bg-brand/10 text-brand'
+                                                : 'border-border text-muted-foreground hover:bg-muted',
+                                        )}
+                                    >
+                                        {language.label}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                        <InputError message={form.errors.supported_languages} />
+                    </div>
+                </Section>
+
+                <Section
+                    icon={Palette}
+                    title="Brand colours"
+                    description="Used on the patient intake and tracking pages."
+                >
+                    <div className="grid gap-4 md:grid-cols-2">
+                        <ColorField
+                            id="brand_primary_color"
+                            label="Primary colour"
+                            value={form.data.brand_primary_color}
+                            fallback="#5F7D45"
+                            disabled={!canEdit}
+                            error={form.errors.brand_primary_color}
+                            onChange={(value) => form.setData('brand_primary_color', value)}
                         />
-                        <div className="grid gap-2">
-                            <Label htmlFor="ai_provider">Preferred AI provider</Label>
-                            <select
-                                id="ai_provider"
-                                className="h-9 rounded-md border border-input bg-transparent px-3 text-sm"
-                                value={form.data.ai_provider}
-                                disabled={!canEdit}
-                                onChange={(event) =>
-                                    form.setData(
-                                        'ai_provider',
-                                        event.target.value,
-                                    )
-                                }
-                            >
-                                <option value="openai">
-                                    OpenAI (Laravel AI SDK)
-                                </option>
-                            </select>
-                            <InputError message={form.errors.ai_provider} />
-                        </div>
-                    </section>
+                        <ColorField
+                            id="brand_secondary_color"
+                            label="Secondary colour"
+                            value={form.data.brand_secondary_color}
+                            fallback="#134E4A"
+                            disabled={!canEdit}
+                            error={form.errors.brand_secondary_color}
+                            onChange={(value) => form.setData('brand_secondary_color', value)}
+                        />
+                    </div>
+                </Section>
 
-                    {canEdit ? (
-                        <Button
-                            type="submit"
-                            disabled={form.processing}
-                            data-test="save-organization-settings"
-                        >
-                            Save settings
-                        </Button>
-                    ) : null}
-                </form>
-            </div>
+                {canEdit ? (
+                    <div className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-background/90 backdrop-blur md:left-[var(--sidebar-width,16rem)]">
+                        <div className="mx-auto flex max-w-4xl items-center justify-between gap-3 px-4 py-3 md:px-6">
+                            <p className="text-sm text-muted-foreground">
+                                {form.isDirty ? 'You have unsaved changes.' : 'All changes saved.'}
+                            </p>
+                            <div className="flex gap-2">
+                                {form.isDirty ? (
+                                    <Button type="button" variant="ghost" onClick={() => form.reset()}>
+                                        Discard
+                                    </Button>
+                                ) : null}
+                                <Button
+                                    type="submit"
+                                    disabled={form.processing || !form.isDirty}
+                                    data-test="save-organization-settings"
+                                >
+                                    Save settings
+                                </Button>
+                            </div>
+                        </div>
+                    </div>
+                ) : null}
+            </form>
         </>
     );
 }

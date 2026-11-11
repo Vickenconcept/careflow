@@ -12,6 +12,12 @@ class OrganizationDemoSeeder extends Seeder
      */
     public function run(): void
     {
+        if (app()->isProduction()) {
+            $this->command?->warn('Skipped: the demo hospital is never created in production, where only real data belongs.');
+
+            return;
+        }
+
         $result = app(CareFlowDemoDataset::class)->seed();
 
         $this->command?->info(sprintf(

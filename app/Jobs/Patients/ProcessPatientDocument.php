@@ -47,6 +47,15 @@ class ProcessPatientDocument implements ShouldBeUnique, ShouldQueue
             return;
         }
 
+        if (($blocked = $document->aiProcessingBlockedReason()) !== null) {
+            $document->update([
+                'processing_status' => DocumentProcessingStatus::NeedsReview,
+                'processing_error' => $blocked,
+            ]);
+
+            return;
+        }
+
         if (
             strtolower((string) config('careflow.ai.provider')) === 'openai'
             && blank(config('ai.providers.openai.key'))

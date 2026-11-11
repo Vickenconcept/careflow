@@ -41,7 +41,9 @@ class CreateCaseCommunication
             $locked = PatientCase::query()->whereKey($case->id)->lockForUpdate()->firstOrFail();
 
             $channel = CommunicationChannel::from($data['channel']);
-            $logOnly = (bool) ($data['log_only'] ?? false);
+            // No WhatsApp sender is connected: WhatsApp entries record a conversation that
+            // happened outside CareFlow and are never queued as if CareFlow would send them.
+            $logOnly = (bool) ($data['log_only'] ?? false) || in_array($channel, [CommunicationChannel::WhatsApp, CommunicationChannel::Other], true);
             $draftWithAi = (bool) ($data['draft_with_ai'] ?? false);
 
             $body = trim((string) ($data['body'] ?? ''));
@@ -50,7 +52,7 @@ class CreateCaseCommunication
             $isAiDraft = false;
 
             if ($draftWithAi) {
-                if ((string) config('careflow.ai.provider', 'mock') !== 'openai') {
+                if ((string) config('careflow.ai.provider', 'openai') !== 'openai') {
                     throw new InvalidArgumentException('AI drafting requires CAREFLOW_AI_PROVIDER=openai with a configured OPENAI_API_KEY.');
                 }
 

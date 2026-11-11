@@ -111,6 +111,22 @@ class Team extends Model
     }
 
     /**
+     * Whether an optional product module is switched on for this organization.
+     */
+    public function moduleEnabled(string $module): bool
+    {
+        return $this->organizationSetting?->moduleEnabled($module) ?? true;
+    }
+
+    /**
+     * Whether an organization notification type is switched on.
+     */
+    public function notificationEnabled(string $key): bool
+    {
+        return $this->organizationSetting?->notificationEnabled($key) ?? true;
+    }
+
+    /**
      * Get the departments for this organization.
      *
      * @return HasMany<Department, $this>

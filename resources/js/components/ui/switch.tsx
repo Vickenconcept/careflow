@@ -28,7 +28,7 @@ function Switch({
             onClick={() => onCheckedChange(!checked)}
             className={cn(
                 'inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors outline-none focus-visible:ring-[3px] focus-visible:ring-brand/35 disabled:cursor-not-allowed disabled:opacity-50',
-                checked ? 'bg-brand' : 'bg-slate-200',
+                checked ? 'bg-brand' : 'bg-slate-300 dark:bg-slate-700',
                 className,
             )}
         >

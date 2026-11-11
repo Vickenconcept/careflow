@@ -3,16 +3,19 @@
 namespace App\Http\Controllers\Organizations;
 
 use App\Actions\Patients\QueuePatientDocumentForProcessing;
+use App\Actions\Patients\RecordDocumentAccess;
 use App\Domains\Cases\CaseStatusTransitionMap;
 use App\Enums\CaseStatus;
 use App\Http\Controllers\Controller;
 use App\Models\PatientCase;
 use App\Models\PatientDocument;
 use App\Models\Team;
+use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -29,6 +32,10 @@ class PatientDocumentController extends Controller
         abort_unless($case->team_id === $current_team->id, 404);
         abort_unless($document->patient_case_id === $case->id, 404);
         Gate::authorize('view', $document);
+
+        if (! $request->header('X-Inertia-Partial-Data')) {
+            app(RecordDocumentAccess::class)->handle($document, $case, $request->user(), 'view', $request->ip());
+        }
 
         $document->load([
             'currentExtractedText',
@@ -91,6 +98,11 @@ class PatientDocumentController extends Controller
                     'case' => $case->reference,
                     'document' => $document->uuid,
                 ]),
+                'review_confirm_url' => route('organizations.documents.review.confirm', [
+                    'current_team' => $current_team->slug,
+                    'case' => $case->reference,
+                    'document' => $document->uuid,
+                ]),
                 'review_update_url' => route('organizations.documents.review.update', [
                     'current_team' => $current_team->slug,
                     'case' => $case->reference,
@@ -99,6 +111,7 @@ class PatientDocumentController extends Controller
                 'is_image' => in_array(strtolower($document->extension), ['jpg', 'jpeg', 'png'], true),
                 'is_pdf' => strtolower($document->extension) === 'pdf',
             ],
+            'navigation' => $this->documentNavigation($current_team, $case, $document),
             'ai' => [
                 'provider' => (string) config('careflow.ai.provider'),
                 'disclaimer_summary' => 'AI-generated draft. Requires review by an authorized healthcare professional.',
@@ -120,6 +133,15 @@ class PatientDocumentController extends Controller
                     'disclaimer' => $document->currentTranslation->disclaimer,
                     'is_synthetic' => $document->currentTranslation->is_synthetic,
                     'provider' => $document->currentTranslation->provider,
+                    'signed_off' => $document->currentTranslation->reviewed_by !== null,
+                    'signed_off_by' => $document->currentTranslation->reviewed_by !== null
+                        ? User::query()->whereKey($document->currentTranslation->reviewed_by)->value('name')
+                        : null,
+                    'sign_off_url' => route('organizations.documents.translation.sign-off', [
+                        'current_team' => $current_team->slug,
+                        'case' => $case->reference,
+                        'document' => $document->uuid,
+                    ]),
                 ] : null,
                 'summary' => $document->currentSummary ? [
                     'version' => $document->currentSummary->version,
@@ -170,16 +192,15 @@ class PatientDocumentController extends Controller
         abort_unless($case->team_id === $current_team->id, 404);
         abort_unless($document->patient_case_id === $case->id, 404);
         Gate::authorize('view', $document);
+        app(RecordDocumentAccess::class)->handle($document, $case, $request->user(), 'preview', $request->ip());
 
-        return Storage::disk($document->disk)->response(
-            $document->path,
-            $document->original_filename,
-            [
-                'Content-Type' => $document->mime_type ?: 'application/octet-stream',
-                'X-Content-Type-Options' => 'nosniff',
-            ],
-            'inline',
-        );
+        $safeInline = in_array($document->mime_type, ['application/pdf', 'image/jpeg', 'image/png'], true);
+
+        if (! $safeInline) {
+            return $this->streamFile($document, 'attachment', 'application/octet-stream');
+        }
+
+        return $this->streamFile($document, 'inline', $document->mime_type);
     }
 
     public function download(Request $request, Team $current_team, PatientCase $case, PatientDocument $document): StreamedResponse
@@ -187,10 +208,68 @@ class PatientDocumentController extends Controller
         abort_unless($case->team_id === $current_team->id, 404);
         abort_unless($document->patient_case_id === $case->id, 404);
         Gate::authorize('download', $document);
+        app(RecordDocumentAccess::class)->handle($document, $case, $request->user(), 'download', $request->ip());
 
-        return Storage::disk($document->disk)->download(
-            $document->path,
-            $document->original_filename,
-        );
+        return $this->streamFile($document, 'attachment', 'application/octet-stream');
+    }
+
+    /**
+     * Stream the stored file through the application so storage URLs are never exposed.
+     */
+    protected function streamFile(PatientDocument $document, string $disposition, string $contentType): StreamedResponse
+    {
+        $filesystem = $document->filesystem();
+        abort_unless($filesystem->exists($document->path), 404);
+
+        return response()->stream(function () use ($filesystem, $document): void {
+            $stream = $filesystem->readStream($document->path);
+            fpassthru($stream);
+
+            if (is_resource($stream)) {
+                fclose($stream);
+            }
+        }, 200, [
+            'Content-Type' => $contentType,
+            'Content-Disposition' => $disposition.'; filename="'.addcslashes(str_replace(["\r", "\n"], '', Str::ascii($document->original_filename)), '"\\').'"',
+            'X-Content-Type-Options' => 'nosniff',
+            'Cache-Control' => 'private, no-store',
+            ...($disposition === 'attachment' ? ['Content-Security-Policy' => "default-src 'none'; sandbox"] : []),
+        ]);
+    }
+
+    /**
+     * Position of the document among the case documents, with review progress.
+     *
+     * @return array{position: int, total: int, pending: int, prev_url: string|null, next_url: string|null, next_pending_url: string|null}
+     */
+    protected function documentNavigation(Team $team, PatientCase $case, PatientDocument $current): array
+    {
+        $documents = $case->documents()
+            ->with(['currentExtraction', 'currentSummary'])
+            ->orderBy('uploaded_at')
+            ->orderBy('id')
+            ->get()
+            ->values();
+
+        $urlFor = fn (?PatientDocument $document): ?string => $document === null ? null : route('organizations.documents.show', [
+            'current_team' => $team->slug,
+            'case' => $case->reference,
+            'document' => $document->uuid,
+        ]);
+
+        $isPending = fn (PatientDocument $document): bool => $document->currentExtraction?->review_status === 'unreviewed'
+            || $document->currentSummary?->review_status === 'unreviewed';
+
+        $index = max(0, (int) $documents->search(fn (PatientDocument $document) => $document->id === $current->id));
+        $nextPending = $documents->first(fn (PatientDocument $document) => $document->id !== $current->id && $isPending($document));
+
+        return [
+            'position' => $index + 1,
+            'total' => $documents->count(),
+            'pending' => $documents->filter($isPending)->count(),
+            'prev_url' => $urlFor($documents->get($index - 1) && $index > 0 ? $documents->get($index - 1) : null),
+            'next_url' => $urlFor($documents->get($index + 1)),
+            'next_pending_url' => $urlFor($nextPending),
+        ];
     }
 }

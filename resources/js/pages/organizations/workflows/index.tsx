@@ -1,5 +1,6 @@
 import { Head, Link } from '@inertiajs/react';
-import { Workflow } from 'lucide-react';
+import { FolderOpen, Workflow } from 'lucide-react';
+import { RowAction, RowActions } from '@/components/row-actions';
 import {
     DataTable,
     DataTableBody,
@@ -14,6 +15,7 @@ import Heading from '@/components/heading';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { dashboard } from '@/routes';
+import OrganizationTabs from '@/components/organization-tabs';
 
 type Execution = {
     id: number;
@@ -53,6 +55,7 @@ export default function WorkflowsIndex({ team, executions }: Props) {
     return (
         <>
             <Head title="Workflow executions" />
+            <OrganizationTabs />
             <div className="space-y-5 p-4 md:p-6">
                 <Heading
                     title="Workflow executions"
@@ -74,6 +77,9 @@ export default function WorkflowsIndex({ team, executions }: Props) {
                                 <DataTableHead>Status</DataTableHead>
                                 <DataTableHead>Started</DataTableHead>
                                 <DataTableHead>Finished</DataTableHead>
+                                <DataTableHead className="text-right">
+                                    Actions
+                                </DataTableHead>
                             </DataTableHeader>
                             <DataTableBody>
                                 {executions.map((execution) => (
@@ -130,6 +136,16 @@ export default function WorkflowsIndex({ team, executions }: Props) {
                                                       execution.finished_at,
                                                   ).toLocaleString()
                                                 : '—'}
+                                        </DataTableCell>
+                                        <DataTableCell>
+                                            <RowActions>
+                                                <RowAction
+                                                    label="Open case"
+                                                    icon={FolderOpen}
+                                                    href={`/${team.slug}/cases/${execution.case_reference}?tab=timeline`}
+                                                    disabled={!execution.case_reference}
+                                                />
+                                            </RowActions>
                                         </DataTableCell>
                                     </DataTableRow>
                                 ))}

@@ -1,12 +1,14 @@
 <?php
 
 use App\Enums\CaseStatus;
+use App\Enums\ConsentType;
 use App\Enums\DocumentCategory;
 use App\Enums\DocumentProcessingStatus;
 use App\Enums\TeamRole;
 use App\Jobs\Patients\ProcessPatientDocument;
 use App\Models\Patient;
 use App\Models\PatientCase;
+use App\Models\PatientConsent;
 use App\Models\PatientDocument;
 use App\Models\PatientEnquiry;
 use App\Models\Team;
@@ -68,13 +70,14 @@ test('document workspace exposes live processing progress props', function () {
             ->where('document.processing_status', 'extracting')
             ->where('document.processing_in_progress', true)
             ->has('document.processing_steps')
-            ->where('ai.provider', 'mock')
+            ->where('ai.provider', 'test-doubles')
             ->where('permissions.canReprocess', true));
 });
 
 test('staff with manage documents permission can requeue ai processing', function () {
     $owner = User::factory()->create();
     $team = $owner->currentTeam;
+    $team->ensureOrganizationSetting()->update(['ai_processing_enabled' => true]);
 
     $patient = Patient::factory()->create(['team_id' => $team->id]);
     $enquiry = PatientEnquiry::factory()->create([
@@ -107,6 +110,7 @@ test('staff with manage documents permission can requeue ai processing', functio
         'processing_status' => DocumentProcessingStatus::Failed,
         'processing_error' => 'Document processing failed.',
     ]);
+    PatientConsent::factory()->create(['team_id' => $team->id, 'patient_id' => $patient->id, 'consent_type' => ConsentType::AiProcessing]);
 
     $this->actingAs($owner)
         ->post(route('organizations.documents.reprocess', [

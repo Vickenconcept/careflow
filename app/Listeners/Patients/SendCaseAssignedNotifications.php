@@ -18,7 +18,7 @@ class SendCaseAssignedNotifications implements ShouldQueue
 
         $actor = User::query()->find($event->actorUserId);
 
-        if ($case === null || $actor === null) {
+        if ($case === null || $actor === null || ! $case->team->notificationEnabled('staff_case_assigned')) {
             return;
         }
 

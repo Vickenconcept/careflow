@@ -34,6 +34,7 @@ import type {
     TeamMember,
     TeamPermissions,
 } from '@/types';
+import OrganizationTabs from '@/components/organization-tabs';
 
 type Props = {
     team: Team;
@@ -91,6 +92,7 @@ export default function TeamEdit({
     return (
         <>
             <Head title={pageTitle} />
+            {team.isPersonal ? null : <OrganizationTabs />}
 
             <h1 className="sr-only">{pageTitle}</h1>
 

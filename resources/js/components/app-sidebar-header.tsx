@@ -21,16 +21,20 @@ export function AppSidebarHeader({
 }: {
     breadcrumbs?: BreadcrumbItemType[];
 }) {
-    const { auth, currentTeam } = usePage().props;
+    const page = usePage();
+    const { auth, currentTeam, pendingWorkCount = 0 } = page.props;
+    const pageTitle = pageTitleFor(page.component);
     const { state, isMobile } = useSidebar();
     const getInitials = useInitials();
-    const casesHref = currentTeam ? `/${currentTeam.slug}/cases` : null;
+    const canOpenCases =
+        currentTeam && currentTeam.role !== 'management_viewer' && currentTeam.role !== 'member';
+    const casesHref = canOpenCases ? `/${currentTeam.slug}/cases` : null;
     const user = auth.user;
     const roleLabel = currentTeam?.roleLabel;
     const showNavbarExpand = isMobile || state === 'collapsed';
 
     return (
-        <header className="z-20 flex shrink-0 items-center gap-3 bg-white px-4 py-3 dark:bg-card md:px-6">
+        <header className="z-20 flex shrink-0 items-center gap-3 bg-background px-4 py-3 md:px-6">
             {showNavbarExpand ? (
                 <SidebarTrigger
                     className={cn(
@@ -45,7 +49,7 @@ export function AppSidebarHeader({
                     <Breadcrumbs breadcrumbs={breadcrumbs} />
                 ) : (
                     <h1 className="font-display text-lg font-semibold tracking-tight text-foreground">
-                        Dashboard
+                        {pageTitle}
                     </h1>
                 )}
             </div>
@@ -69,16 +73,33 @@ export function AppSidebarHeader({
 
                 <ThemeToggle className="size-8 rounded-lg border-0 bg-transparent shadow-none hover:bg-muted/70 [&_svg]:size-[18px] [&_svg]:stroke-[1.25] [&_svg]:text-muted-foreground" />
 
-                <Button
-                    type="button"
-                    size="icon"
-                    variant="ghost"
-                    className="relative size-8 rounded-lg text-muted-foreground hover:bg-muted/70 hover:text-foreground"
-                    aria-label="Notifications"
-                >
-                    <IconBell className={thinIcon} />
-                    <span className="absolute top-1.5 right-1.5 size-1.5 rounded-full bg-destructive" />
-                </Button>
+                {casesHref ? (
+                    <Button
+                        asChild
+                        size="icon"
+                        variant="ghost"
+                        className="relative size-8 rounded-lg text-muted-foreground hover:bg-muted/70 hover:text-foreground"
+                    >
+                        <Link
+                            href={`/${currentTeam?.slug}/work`}
+                            aria-label={
+                                pendingWorkCount > 0
+                                    ? `${pendingWorkCount} open tasks assigned to you. Open my work`
+                                    : 'My work. No open tasks'
+                            }
+                            title={
+                                pendingWorkCount > 0
+                                    ? `${pendingWorkCount} open tasks assigned to you`
+                                    : 'No open tasks assigned to you'
+                            }
+                        >
+                            <IconBell className={thinIcon} />
+                            {pendingWorkCount > 0 ? (
+                                <span className="absolute top-1.5 right-1.5 size-1.5 rounded-full bg-destructive" />
+                            ) : null}
+                        </Link>
+                    </Button>
+                ) : null}
 
                 {user ? (
                     <DropdownMenu>
@@ -127,4 +148,30 @@ export function AppSidebarHeader({
             </div>
         </header>
     );
+}
+
+const PAGE_TITLES: Record<string, string> = {
+    dashboard: 'Dashboard',
+    'organizations/work': 'My work',
+    'organizations/patients': 'Patients',
+    'organizations/coordination': 'Coordination',
+    'organizations/audit': 'Audit log',
+    'organizations/roles': 'Roles and permissions',
+    'organizations/preferences': 'Modules and notifications',
+    'organizations/doctor-queue': 'Doctor queue',
+    'organizations/workflows/index': 'Workflows',
+    'organizations/settings': 'Organization settings',
+    'organizations/message-templates/index': 'Message templates',
+    'organizations/departments/index': 'Departments',
+};
+
+function pageTitleFor(component: string): string {
+    if (PAGE_TITLES[component]) {
+        return PAGE_TITLES[component];
+    }
+
+    const last = component.split('/').pop() ?? 'Dashboard';
+    const words = last.replace(/-/g, ' ');
+
+    return words.charAt(0).toUpperCase() + words.slice(1);
 }

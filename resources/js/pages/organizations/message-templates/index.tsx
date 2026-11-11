@@ -6,6 +6,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { dashboard } from '@/routes';
+import OrganizationTabs from '@/components/organization-tabs';
+import { ToggleField } from '@/components/toggle-field';
 
 type Template = {
     uuid: string;
@@ -114,6 +116,7 @@ export default function MessageTemplatesIndex({
     return (
         <>
             <Head title="Message templates" />
+            <OrganizationTabs />
             <div className="space-y-8 p-4 md:p-6">
                 <Heading
                     title="Message templates"
@@ -217,23 +220,14 @@ export default function MessageTemplatesIndex({
                                         ))}
                                     </select>
                                 </div>
-                                <div className="flex items-center gap-2 md:col-span-2">
-                                    <input
-                                        id="is_active"
-                                        type="checkbox"
-                                        className="size-4 rounded border-input"
-                                        checked={form.data.is_active}
-                                        onChange={(event) =>
-                                            form.setData(
-                                                'is_active',
-                                                event.target.checked,
-                                            )
-                                        }
-                                    />
-                                    <Label htmlFor="is_active">
-                                        Active template
-                                    </Label>
-                                </div>
+                                <ToggleField
+                                    id="is_active"
+                                    className="md:col-span-2"
+                                    label="Active template"
+                                    description="Inactive templates are kept but not offered when writing to patients."
+                                    checked={form.data.is_active}
+                                    onChange={(value) => form.setData('is_active', value)}
+                                />
                             </div>
 
                             <div className="space-y-4">

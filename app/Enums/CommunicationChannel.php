@@ -14,7 +14,7 @@ enum CommunicationChannel: string
     {
         return match ($this) {
             self::Email => 'Email',
-            self::WhatsApp => 'WhatsApp Business',
+            self::WhatsApp => 'WhatsApp (record a conversation)',
             self::Internal => 'Internal comment',
             self::PatientPortal => 'Patient portal',
             self::Other => 'Other',

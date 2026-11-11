@@ -98,6 +98,8 @@ export type OrganizationSettings = {
     brand_secondary_color: string | null;
     ai_processing_enabled: boolean;
     ai_provider: string;
+    assistant_enabled: boolean;
+    assistant_name: string;
 };
 
 export type Department = {

@@ -20,7 +20,6 @@ use App\Models\DocumentSummary;
 use App\Models\DocumentTranslation;
 use App\Models\PatientDocument;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use RuntimeException;
 use Throwable;
@@ -203,7 +202,7 @@ class DocumentProcessingPipeline
 
     protected function assertFileIsValid(PatientDocument $document): void
     {
-        if (! Storage::disk($document->disk)->exists($document->path)) {
+        if (! $document->filesystem()->exists($document->path)) {
             throw new RuntimeException('Stored file is missing from private storage.');
         }
 

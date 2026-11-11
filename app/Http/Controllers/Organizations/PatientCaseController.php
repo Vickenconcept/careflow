@@ -23,6 +23,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Organizations\FilterPatientCasesRequest;
 use App\Models\Membership;
 use App\Models\PatientCase;
+use App\Models\SavedCaseView;
 use App\Models\Team;
 use App\Models\User;
 use App\Queries\PatientCaseIndexQuery;
@@ -95,6 +96,18 @@ class PatientCaseController extends Controller
             ],
             'cases' => $cases,
             'filters' => $filters,
+            'quickViewCounts' => $query->quickViewCounts($user, $current_team),
+            'savedViews' => SavedCaseView::query()
+                ->forTeam($current_team)
+                ->where('user_id', $user->id)
+                ->orderBy('name')
+                ->get()
+                ->map(fn (SavedCaseView $view) => [
+                    'id' => $view->id,
+                    'name' => $view->name,
+                    'filters' => $view->filters,
+                ])
+                ->values(),
             'filterOptions' => [
                 'statuses' => collect(CaseStatus::cases())->map(fn (CaseStatus $status) => [
                     'value' => $status->value,
@@ -141,6 +154,7 @@ class PatientCaseController extends Controller
             'permissions' => [
                 'canAssignCases' => $user->hasTeamPermission($current_team, TeamPermission::AssignCases),
                 'canUpdateStatus' => $user->hasTeamPermission($current_team, TeamPermission::UpdateCaseStatus),
+                'canExport' => $user->hasTeamPermission($current_team, TeamPermission::ManageCases),
             ],
         ]);
     }
@@ -157,9 +171,9 @@ class PatientCaseController extends Controller
         $canViewClinical = $request->user()->can('viewClinical', $case);
         $canManageProposals = $request->user()->can('manageProposals', $case);
         $canApproveProposals = $request->user()->can('approveProposals', $case);
-        $canViewProposals = $canManageProposals || $canApproveProposals || $request->user()->can('manage', $case);
+        $canViewProposals = $current_team->moduleEnabled('proposals') && ($canManageProposals || $canApproveProposals || $request->user()->can('manage', $case));
         $canManageAppointments = $request->user()->can('manageAppointments', $case);
-        $canViewAppointments = $canManageAppointments || $request->user()->can('manage', $case) || $request->user()->can('view', $case);
+        $canViewAppointments = $current_team->moduleEnabled('appointments') && ($canManageAppointments || $request->user()->can('manage', $case) || $request->user()->can('view', $case));
         $canManageTravel = $request->user()->can('manageTravel', $case);
         $canManageTasks = $request->user()->can('manageTasks', $case);
         $canManageCommunications = $request->user()->can('manageCommunications', $case);
@@ -171,7 +185,7 @@ class PatientCaseController extends Controller
             'patient',
             'enquiry.department',
             'department:id,name',
-            'documents' => fn ($query) => $query->orderByDesc('uploaded_at')->orderByDesc('id'),
+            'documents' => fn ($query) => $query->with(['currentExtraction', 'currentSummary'])->orderByDesc('uploaded_at')->orderByDesc('id'),
             'assignedCoordinator:id,name,email',
             'assignedDoctor:id,name,email',
             'activities' => fn ($query) => $query
@@ -303,6 +317,11 @@ class PatientCaseController extends Controller
                     'category' => $document->category->label(),
                     'processing_status' => $document->processing_status->label(),
                     'size_bytes' => $document->size_bytes,
+                    'ai_review' => match (true) {
+                        $document->currentExtraction === null && $document->currentSummary === null => 'none',
+                        $document->currentExtraction?->review_status === 'unreviewed' || $document->currentSummary?->review_status === 'unreviewed' => 'unreviewed',
+                        default => 'reviewed',
+                    },
                     'uploaded_at' => $document->uploaded_at->toIso8601String(),
                     'review_url' => route('organizations.documents.show', [
                         'current_team' => $current_team->slug,
@@ -491,7 +510,7 @@ class PatientCaseController extends Controller
                         'doctor_id' => $case->assigned_doctor_id,
                     ],
                 ] : null,
-                'travel' => $canViewOps ? [
+                'travel' => $canViewOps && $current_team->moduleEnabled('travel') ? [
                     'disclaimer' => 'Travel records are administrative only. Do not store passport numbers here.',
                     'arrangement' => $case->travelArrangement ? [
                         'uuid' => $case->travelArrangement->uuid,
@@ -585,7 +604,7 @@ class PatientCaseController extends Controller
                         ]),
                     ],
                 ] : null,
-                'communications' => $canViewOps ? [
+                'communications' => $canViewOps && $current_team->moduleEnabled('communications') ? [
                     'disclaimer' => 'External messages require staff approval. AI drafts are administrative only and must not send clinical advice.',
                     'items' => $case->communications->map(fn ($communication) => [
                         'uuid' => $communication->uuid,

@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 360" fill="none">
+  <defs>
+    <linearGradient id="coat" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#e2ecff"/>
+    </linearGradient>
+    <linearGradient id="skin" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f6d2b0"/>
+      <stop offset="1" stop-color="#e8b88f"/>
+    </linearGradient>
+    <linearGradient id="hair" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#334155"/>
+      <stop offset="1" stop-color="#0f172a"/>
+    </linearGradient>
+  </defs>
+
+  <!-- soft backdrop -->
+  <circle cx="160" cy="180" r="150" fill="#ffffff" fill-opacity="0.14"/>
+  <circle cx="160" cy="180" r="112" fill="#ffffff" fill-opacity="0.12"/>
+
+  <!-- body: white coat -->
+  <path d="M34 360 C34 292 78 258 124 250 L196 250 C242 258 286 292 286 360 Z" fill="url(#coat)"/>
+  <!-- scrub top -->
+  <path d="M128 250 L160 312 L192 250 Z" fill="#14b8a6"/>
+  <path d="M138 250 L160 292 L182 250 Z" fill="#0d9488" fill-opacity="0.45"/>
+  <!-- lapels -->
+  <path d="M124 250 L160 316 L136 360 L96 360 L104 290 Z" fill="#dbe6fb"/>
+  <path d="M196 250 L160 316 L184 360 L224 360 L216 290 Z" fill="#dbe6fb"/>
+  <path d="M124 250 L160 316" stroke="#c3d3f2" stroke-width="2"/>
+  <path d="M196 250 L160 316" stroke="#c3d3f2" stroke-width="2"/>
+
+  <!-- neck -->
+  <path d="M146 214 H174 V256 C170 266 150 266 146 256 Z" fill="#e3ad84"/>
+
+  <!-- stethoscope -->
+  <path d="M126 252 C112 300 138 332 166 322 C190 314 204 288 194 252" stroke="#1e293b" stroke-width="5" stroke-linecap="round" fill="none"/>
+  <circle cx="166" cy="326" r="11" fill="#cbd5e1" stroke="#1e293b" stroke-width="4"/>
+  <circle cx="166" cy="326" r="4" fill="#64748b"/>
+
+  <!-- chest pocket + pen -->
+  <rect x="88" y="300" width="34" height="30" rx="5" fill="#ffffff" stroke="#c3d3f2" stroke-width="2"/>
+  <rect x="100" y="290" width="4" height="22" rx="2" fill="#2f6fed"/>
+  <rect x="108" y="292" width="4" height="20" rx="2" fill="#14b8a6"/>
+
+  <!-- head -->
+  <ellipse cx="116" cy="184" rx="8" ry="11" fill="#e8b88f"/>
+  <ellipse cx="204" cy="184" rx="8" ry="11" fill="#e8b88f"/>
+  <ellipse cx="160" cy="178" rx="43" ry="50" fill="url(#skin)"/>
+
+  <!-- hair -->
+  <path d="M115 176 C106 120 148 102 180 110 C214 118 218 154 205 176 C202 154 188 140 160 140 C136 140 120 154 115 176 Z" fill="url(#hair)"/>
+
+  <!-- brows -->
+  <path d="M132 168 Q144 161 154 167" stroke="#1e293b" stroke-width="3" stroke-linecap="round"/>
+  <path d="M166 167 Q176 161 188 168" stroke="#1e293b" stroke-width="3" stroke-linecap="round"/>
+
+  <!-- glasses -->
+  <rect x="129" y="172" width="30" height="24" rx="9" fill="#ffffff" fill-opacity="0.35" stroke="#1e293b" stroke-width="3"/>
+  <rect x="165" y="172" width="30" height="24" rx="9" fill="#ffffff" fill-opacity="0.35" stroke="#1e293b" stroke-width="3"/>
+  <path d="M159 183 H165" stroke="#1e293b" stroke-width="3"/>
+  <circle cx="144" cy="184" r="3.4" fill="#1e293b"/>
+  <circle cx="180" cy="184" r="3.4" fill="#1e293b"/>
+
+  <!-- nose + smile -->
+  <path d="M160 190 Q156 200 162 202" stroke="#c98f66" stroke-width="3" stroke-linecap="round" fill="none"/>
+  <path d="M143 212 Q160 226 177 212" stroke="#9a3412" stroke-width="3.5" stroke-linecap="round" fill="none"/>
+
+  <!-- clipboard -->
+  <g transform="rotate(8 240 300)">
+    <rect x="208" y="262" width="66" height="84" rx="9" fill="#ffffff" stroke="#bcd0f5" stroke-width="3"/>
+    <rect x="228" y="255" width="26" height="12" rx="5" fill="#2f6fed"/>
+    <rect x="218" y="282" width="46" height="5" rx="2.5" fill="#cbd9f5"/>
+    <rect x="218" y="294" width="36" height="5" rx="2.5" fill="#cbd9f5"/>
+    <rect x="218" y="306" width="42" height="5" rx="2.5" fill="#cbd9f5"/>
+    <circle cx="228" cy="329" r="9" fill="#10b981"/>
+    <path d="M223.5 329 L227 332.5 L233 325.5" stroke="#ffffff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  <!-- hand holding clipboard -->
+  <ellipse cx="214" cy="332" rx="11" ry="9" fill="#e8b88f"/>
+</svg>

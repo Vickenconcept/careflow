@@ -1,5 +1,6 @@
-import { Form, Head, router, useForm } from '@inertiajs/react';
-import { ArrowDown, ArrowUp, Network, Plus } from 'lucide-react';
+import { Head, router, useForm } from '@inertiajs/react';
+import { ArrowDown, ArrowUp, CheckCircle2, MinusCircle, Network, Pencil, Plus, Trash2 } from 'lucide-react';
+import { RowAction, RowActions } from '@/components/row-actions';
 import { useState } from 'react';
 import {
     DataTable,
@@ -27,6 +28,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { dashboard } from '@/routes';
 import type { Department, Team } from '@/types';
+import OrganizationTabs from '@/components/organization-tabs';
 
 type Props = {
     team: Pick<Team, 'id' | 'name' | 'slug'>;
@@ -105,6 +107,7 @@ export default function DepartmentsIndex({
     return (
         <>
             <Head title="Departments" />
+            <OrganizationTabs />
 
             <div className="space-y-5 p-4 md:p-6">
                 <div className="flex flex-wrap items-start justify-between gap-4">
@@ -179,6 +182,11 @@ export default function DepartmentsIndex({
                                                         : 'rounded-full border-slate-200 bg-slate-50 text-slate-600'
                                                 }
                                             >
+                                                {department.is_active ? (
+                                                    <CheckCircle2 className="mr-1 size-3.5" />
+                                                ) : (
+                                                    <MinusCircle className="mr-1 size-3.5" />
+                                                )}
                                                 {department.is_active
                                                     ? 'Active'
                                                     : 'Inactive'}
@@ -186,12 +194,10 @@ export default function DepartmentsIndex({
                                         </DataTableCell>
                                         {permissions.canManageDepartments ? (
                                             <DataTableCell>
-                                                <div className="flex items-center justify-end gap-1.5">
-                                                    <Button
-                                                        type="button"
-                                                        variant="outline"
-                                                        size="icon"
-                                                        className="size-8 rounded-lg border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+                                                <RowActions>
+                                                    <RowAction
+                                                        label="Move up"
+                                                        icon={ArrowUp}
                                                         disabled={index === 0}
                                                         onClick={() =>
                                                             moveDepartment(
@@ -199,15 +205,10 @@ export default function DepartmentsIndex({
                                                                 'up',
                                                             )
                                                         }
-                                                        aria-label={`Move ${department.name} up`}
-                                                    >
-                                                        <ArrowUp className="size-3.5" />
-                                                    </Button>
-                                                    <Button
-                                                        type="button"
-                                                        variant="outline"
-                                                        size="icon"
-                                                        className="size-8 rounded-lg border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+                                                    />
+                                                    <RowAction
+                                                        label="Move down"
+                                                        icon={ArrowDown}
                                                         disabled={
                                                             index ===
                                                             departments.length -
@@ -219,54 +220,36 @@ export default function DepartmentsIndex({
                                                                 'down',
                                                             )
                                                         }
-                                                        aria-label={`Move ${department.name} down`}
-                                                    >
-                                                        <ArrowDown className="size-3.5" />
-                                                    </Button>
-                                                    <Button
-                                                        type="button"
-                                                        variant="outline"
-                                                        size="sm"
-                                                        className="rounded-full"
+                                                    />
+                                                    <RowAction
+                                                        label="Edit department"
+                                                        icon={Pencil}
                                                         onClick={() =>
                                                             openEditModal(
                                                                 department,
                                                             )
                                                         }
-                                                    >
-                                                        Edit
-                                                    </Button>
-                                                    <Form
-                                                        action={`/${team.slug}/organization/departments/${department.slug}`}
-                                                        method="delete"
-                                                        options={{
-                                                            preserveScroll: true,
-                                                        }}
-                                                        onSubmit={(event) => {
+                                                    />
+                                                    <RowAction
+                                                        label="Delete department"
+                                                        icon={Trash2}
+                                                        tone="danger"
+                                                        onClick={() => {
                                                             if (
-                                                                !confirm(
+                                                                confirm(
                                                                     `Delete ${department.name}?`,
                                                                 )
                                                             ) {
-                                                                event.preventDefault();
+                                                                router.delete(
+                                                                    `/${team.slug}/organization/departments/${department.slug}`,
+                                                                    {
+                                                                        preserveScroll: true,
+                                                                    },
+                                                                );
                                                             }
                                                         }}
-                                                    >
-                                                        {({ processing }) => (
-                                                            <Button
-                                                                type="submit"
-                                                                variant="destructive"
-                                                                size="sm"
-                                                                className="rounded-full"
-                                                                disabled={
-                                                                    processing
-                                                                }
-                                                            >
-                                                                Delete
-                                                            </Button>
-                                                        )}
-                                                    </Form>
-                                                </div>
+                                                    />
+                                                </RowActions>
                                             </DataTableCell>
                                         ) : null}
                                     </DataTableRow>

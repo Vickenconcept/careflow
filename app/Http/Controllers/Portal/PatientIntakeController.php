@@ -8,6 +8,7 @@ use App\Enums\DocumentCategory;
 use App\Enums\PatientGender;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Portal\SubmitPatientIntakeRequest;
+use App\Models\PatientCase;
 use App\Models\Team;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -29,6 +30,7 @@ class PatientIntakeController extends Controller
                 'name' => $settings->legal_name ?: $organization->name,
                 'slug' => $organization->slug,
                 'brand_primary_color' => $settings->brand_primary_color,
+                'logo_url' => $settings->logo_path ? route('portal.logo', ['organization' => $organization->slug]) : null,
                 'default_language' => $settings->default_language,
                 'supported_languages' => $supportedLanguages,
             ],
@@ -97,10 +99,18 @@ class PatientIntakeController extends Controller
 
         abort_unless($token !== '', 404);
 
+        $case = PatientCase::query()
+            ->forTeam($organization)
+            ->where('reference', $reference)
+            ->with('patient:id,preferred_language')
+            ->first();
+
         return Inertia::render('portal/intake-confirmation', [
+            'locale' => $case?->patient?->preferred_language ?? 'en',
             'organization' => [
                 'name' => $organization->organizationSetting?->legal_name ?: $organization->name,
                 'slug' => $organization->slug,
+                'logo_url' => $organization->organizationSetting?->logo_path ? route('portal.logo', ['organization' => $organization->slug]) : null,
             ],
             'reference' => $reference,
             'trackingUrl' => route('portal.cases.show', [

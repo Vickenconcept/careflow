@@ -41,6 +41,54 @@ class PatientCaseIndexQuery
     }
 
     /**
+     * Filtered, visibility-scoped query without pagination, for authorized exports.
+     *
+     * @param  array<string, mixed>  $filters
+     * @return Builder<PatientCase>
+     */
+    public function exportQuery(User $user, Team $team, array $filters): Builder
+    {
+        $query = PatientCase::query()
+            ->visibleToStaff($user, $team)
+            ->with([
+                'patient:id,first_name,last_name,country_of_residence,preferred_language',
+                'department:id,name',
+                'enquiry:id,submitted_at',
+                'assignedCoordinator:id,name',
+                'assignedDoctor:id,name',
+            ])
+            ->withCount(['tasks as open_tasks_count' => fn (Builder $tasks) => $tasks->whereIn('status', ['open', 'in_progress', 'waiting'])]);
+
+        $this->applyFilters($query, $user, $filters);
+        $this->applySorting($query, $filters['sort'] ?? 'recent');
+
+        return $query;
+    }
+
+    /**
+     * Counts for the cases list quick-view tabs, ignoring other filters.
+     *
+     * @return array{all: int, mine: int, unassigned: int, awaiting_documents: int, awaiting_doctor_review: int, awaiting_patient_response: int}
+     */
+    public function quickViewCounts(User $user, Team $team): array
+    {
+        $base = fn (): Builder => PatientCase::query()->visibleToStaff($user, $team);
+
+        return [
+            'all' => $base()->count(),
+            'mine' => $base()->where(function (Builder $builder) use ($user): void {
+                $builder
+                    ->where('assigned_coordinator_id', $user->id)
+                    ->orWhere('assigned_doctor_id', $user->id);
+            })->count(),
+            'unassigned' => $base()->whereNull('assigned_coordinator_id')->count(),
+            'awaiting_documents' => $base()->where('status', CaseStatus::AwaitingDocuments)->count(),
+            'awaiting_doctor_review' => $base()->where('status', CaseStatus::AwaitingDoctorReview)->count(),
+            'awaiting_patient_response' => $base()->where('status', CaseStatus::AwaitingPatientResponse)->count(),
+        ];
+    }
+
+    /**
      * @param  Builder<PatientCase>  $query
      * @param  array<string, mixed>  $filters
      */

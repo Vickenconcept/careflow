@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\CaseStatus;
+use App\Enums\ConsentType;
 use App\Enums\DocumentCategory;
 use App\Enums\DocumentProcessingStatus;
 use App\Jobs\Patients\ProcessPatientDocument;
@@ -10,10 +11,10 @@ use App\Models\DocumentSummary;
 use App\Models\DocumentTranslation;
 use App\Models\Patient;
 use App\Models\PatientCase;
+use App\Models\PatientConsent;
 use App\Models\PatientDocument;
 use App\Models\PatientEnquiry;
 use App\Models\Team;
-use App\Services\Documents\DocumentProcessingPipeline;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
@@ -25,6 +26,7 @@ test('mock document processing pipeline stores versioned synthetic outputs', fun
     $team = Team::factory()->create();
     $team->ensureOrganizationSetting()->update([
         'default_language' => 'en',
+        'ai_processing_enabled' => true,
     ]);
 
     $patient = Patient::factory()->create(['team_id' => $team->id]);
@@ -43,6 +45,8 @@ test('mock document processing pipeline stores versioned synthetic outputs', fun
     $uuid = (string) Str::uuid();
     $path = "teams/{$team->id}/cases/{$case->id}/documents/{$uuid}.txt";
     Storage::disk('local')->put($path, "Reported diagnosis: Demo arrhythmia suspicion\nPatient complaint: palpitations");
+
+    PatientConsent::factory()->create(['team_id' => $team->id, 'patient_id' => $patient->id, 'consent_type' => ConsentType::AiProcessing]);
 
     $document = PatientDocument::factory()->create([
         'team_id' => $team->id,

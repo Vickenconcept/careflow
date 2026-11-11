@@ -17,6 +17,17 @@ class QueuePatientDocumentForProcessing
      */
     public function handle(PatientDocument $document): PatientDocument
     {
+        $blocked = $document->aiProcessingBlockedReason();
+
+        if ($blocked !== null) {
+            $document->update([
+                'processing_status' => DocumentProcessingStatus::NeedsReview,
+                'processing_error' => $blocked,
+            ]);
+
+            return $document->fresh();
+        }
+
         $document->update([
             'processing_status' => DocumentProcessingStatus::Pending,
             'processing_error' => null,

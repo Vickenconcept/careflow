@@ -9,6 +9,7 @@ use App\Models\Membership;
 use App\Models\Patient;
 use App\Models\TeamInvitation;
 use App\Queries\OrganizationDashboardMetricsQuery;
+use Illuminate\Http\RedirectResponse;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -17,10 +18,16 @@ class DashboardController extends Controller
     public function __invoke(
         FilterDashboardMetricsRequest $request,
         OrganizationDashboardMetricsQuery $metricsQuery,
-    ): Response {
+    ): Response|RedirectResponse {
         $email = strtolower($request->user()->email);
         $team = $request->user()->currentTeam;
         $filters = $request->filters();
+
+        $role = $team !== null ? $request->user()->teamRole($team) : null;
+
+        if ($team !== null && in_array($role, [TeamRole::Doctor, TeamRole::Nurse], true)) {
+            return to_route('organizations.doctor-queue', ['current_team' => $team->slug]);
+        }
 
         $pendingInvitations = TeamInvitation::query()
             ->with(['inviter', 'team'])

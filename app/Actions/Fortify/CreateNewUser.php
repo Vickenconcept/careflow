@@ -5,9 +5,11 @@ namespace App\Actions\Fortify;
 use App\Actions\Teams\CreateTeam;
 use App\Concerns\PasswordValidationRules;
 use App\Concerns\ProfileValidationRules;
+use App\Models\TeamInvitation;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\ValidationException;
 use Laravel\Fortify\Contracts\CreatesNewUsers;
 
 class CreateNewUser implements CreatesNewUsers
@@ -30,6 +32,20 @@ class CreateNewUser implements CreatesNewUsers
             ...$this->profileRules(),
             'password' => $this->passwordRules(),
         ])->validate();
+
+        if (! config('careflow.allow_registration', true)) {
+            $invited = TeamInvitation::query()
+                ->where('email', $input['email'])
+                ->whereNull('accepted_at')
+                ->where(fn ($query) => $query->whereNull('expires_at')->orWhere('expires_at', '>=', now()))
+                ->exists();
+
+            if (! $invited) {
+                throw ValidationException::withMessages([
+                    'email' => 'Registration is by invitation only. Ask your organization administrator to invite you.',
+                ]);
+            }
+        }
 
         return DB::transaction(function () use ($input) {
             $user = User::create([
