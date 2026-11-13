@@ -13,6 +13,8 @@ class SecurityHeaders
      *
      * Referrer-Policy matters most here: patient tracking links carry an access token
      * in the query string and must never leak to third parties through the Referer header.
+     * "same-origin" keeps the Referer inside CareFlow only, which forms need so a
+     * failed submission (for example a wrong password) returns to the same page.
      *
      * @param  Closure(Request): (Response)  $next
      */
@@ -22,7 +24,7 @@ class SecurityHeaders
 
         $response->headers->set('X-Content-Type-Options', 'nosniff');
         $response->headers->set('X-Frame-Options', 'SAMEORIGIN');
-        $response->headers->set('Referrer-Policy', 'no-referrer');
+        $response->headers->set('Referrer-Policy', 'same-origin');
         $response->headers->set('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()');
 
         if ($request->routeIs('portal.*')) {

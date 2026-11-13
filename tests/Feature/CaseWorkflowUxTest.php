@@ -1452,7 +1452,7 @@ test('every response carries baseline security headers and portal pages are neve
 
     $response = $this->get(route('portal.intake.create', ['organization' => $team->slug]))->assertOk();
 
-    expect($response->headers->get('Referrer-Policy'))->toBe('no-referrer')
+    expect($response->headers->get('Referrer-Policy'))->toBe('same-origin')
         ->and($response->headers->get('X-Content-Type-Options'))->toBe('nosniff')
         ->and($response->headers->get('X-Frame-Options'))->toBe('SAMEORIGIN')
         ->and($response->headers->get('Cache-Control'))->toContain('no-store');

@@ -6,6 +6,7 @@ import {
     ArrowRight,
     Bot,
     CheckCircle2,
+    Columns2,
     Download,
     FileText,
     History,
@@ -22,6 +23,7 @@ import {
 import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import Heading from '@/components/heading';
 import InputError from '@/components/input-error';
+import PageTabs from '@/components/page-tabs';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -136,6 +138,10 @@ type Props = {
     };
 };
 
+type DocumentView = 'document' | 'assist' | 'split';
+
+const VIEW_STORAGE_KEY = 'careflow.document.view';
+
 export default function DocumentComparison({
     team,
     case: patientCase,
@@ -147,6 +153,28 @@ export default function DocumentComparison({
 }: Props) {
     const confirmForm = useForm({});
     const signOffForm = useForm({});
+    const [view, setView] = useState<DocumentView>(() => {
+        if (typeof window === 'undefined') {
+            return 'document';
+        }
+
+        try {
+            const saved = window.localStorage.getItem(VIEW_STORAGE_KEY);
+
+            return saved === 'assist' || saved === 'split' ? saved : 'document';
+        } catch {
+            return 'document';
+        }
+    });
+    const chooseView = (next: DocumentView) => {
+        setView(next);
+
+        try {
+            window.localStorage.setItem(VIEW_STORAGE_KEY, next);
+        } catch {
+            // Remembering the view is a convenience only.
+        }
+    };
     const [zoom, setZoom] = useState(100);
     const [pdfPage, setPdfPage] = useState(1);
     const form = useForm({
@@ -500,7 +528,7 @@ export default function DocumentComparison({
                     </div>
                 ) : null}
 
-                <section className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_10px_30px_-24px_rgba(15,23,42,0.35)]">
+                <section className="light-surface overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_10px_30px_-24px_rgba(15,23,42,0.35)]">
                     <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 px-5 py-4">
                         <div className="flex items-center gap-2.5">
                             <span className="flex size-8 items-center justify-center rounded-xl bg-sky-50 text-sky-700">
@@ -619,8 +647,38 @@ export default function DocumentComparison({
                     )}
                 </section>
 
-                <div className="grid gap-5 xl:h-[calc(100svh-11rem)] xl:grid-cols-2 xl:items-stretch">
-                    <section className="flex min-h-[28rem] flex-col overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_10px_30px_-24px_rgba(15,23,42,0.35)] xl:min-h-0">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                    <PageTabs
+                        label="Document views"
+                        active={view}
+                        onSelect={(id) => chooseView(id as DocumentView)}
+                        tabs={[
+                            { id: 'document', label: 'Document', icon: FileText },
+                            { id: 'assist', label: 'AI assist', icon: Bot },
+                            { id: 'split', label: 'Side by side', icon: Columns2 },
+                        ]}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                        {view === 'split'
+                            ? 'Compare the original with the AI draft.'
+                            : 'Use Side by side to compare the original with the AI draft.'}
+                    </p>
+                </div>
+
+                <div
+                    className={cn(
+                        'grid gap-5',
+                        view === 'split'
+                            ? 'xl:h-[calc(100svh-11rem)] xl:grid-cols-2 xl:items-stretch'
+                            : 'h-[calc(100svh-12rem)] min-h-[32rem]',
+                    )}
+                >
+                    <section
+                        className={cn(
+                            'light-surface flex min-h-[28rem] flex-col overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_10px_30px_-24px_rgba(15,23,42,0.35)] xl:min-h-0',
+                            view === 'assist' && 'hidden',
+                        )}
+                    >
                         <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
                             <div className="flex items-center gap-2.5">
                                 <span className="flex size-8 items-center justify-center rounded-xl bg-slate-100 text-slate-600">
@@ -754,7 +812,12 @@ export default function DocumentComparison({
                         </div>
                     </section>
 
-                    <section className="flex min-h-[28rem] flex-col overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_10px_30px_-24px_rgba(15,23,42,0.35)] xl:min-h-0">
+                    <section
+                        className={cn(
+                            'light-surface flex min-h-[28rem] flex-col overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_10px_30px_-24px_rgba(15,23,42,0.35)] xl:min-h-0',
+                            view === 'document' && 'hidden',
+                        )}
+                    >
                         <div className="flex shrink-0 items-center gap-2.5 border-b border-slate-100 px-5 py-4">
                             <span className="flex size-8 items-center justify-center rounded-xl bg-brand/10 text-brand">
                                 <Bot className="size-4" />
@@ -897,7 +960,7 @@ export default function DocumentComparison({
                 </div>
 
                 {permissions.canReviewAi ? (
-                    <section className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_10px_30px_-24px_rgba(15,23,42,0.35)]">
+                    <section className="light-surface overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_10px_30px_-24px_rgba(15,23,42,0.35)]">
                         <div className="border-b border-slate-100 px-5 py-4">
                             <div className="flex items-center gap-2.5">
                                 <span className="flex size-8 items-center justify-center rounded-xl bg-violet-50 text-violet-600">
@@ -1000,7 +1063,7 @@ export default function DocumentComparison({
                 ) : null}
 
                 {ai.review_events.length > 0 ? (
-                    <section className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_10px_30px_-24px_rgba(15,23,42,0.35)]">
+                    <section className="light-surface overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_10px_30px_-24px_rgba(15,23,42,0.35)]">
                         <div className="border-b border-slate-100 px-5 py-4">
                             <div className="flex items-center gap-2.5">
                                 <span className="flex size-8 items-center justify-center rounded-xl bg-slate-100 text-slate-600">

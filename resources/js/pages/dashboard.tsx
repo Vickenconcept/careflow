@@ -305,7 +305,7 @@ function Donut({
     let offset = 0;
 
     return (
-        <div className="flex h-full flex-col items-center justify-between gap-4">
+        <div className="flex flex-1 flex-col items-center gap-5">
             <div className="relative size-44 shrink-0">
                 <svg viewBox="0 0 160 160" className="size-full -rotate-90">
                     <circle
@@ -350,14 +350,17 @@ function Donut({
                     </span>
                 </div>
             </div>
-            <ul className="grid w-full grid-cols-2 gap-x-3 gap-y-1.5 text-[11px] text-[#26412f]">
+            <ul className="w-full space-y-1.5 text-xs text-[#26412f]">
                 {segments.map((segment) => (
-                    <li key={segment.label} className="flex items-center gap-1.5">
+                    <li
+                        key={segment.label}
+                        className="flex items-center gap-2 rounded-lg bg-white/45 px-2.5 py-1.5"
+                    >
                         <span
                             className="size-2 shrink-0 rounded-sm"
                             style={{ background: segment.color }}
                         />
-                        <span className="truncate">{segment.label}</span>
+                        <span className="min-w-0 flex-1">{segment.label}</span>
                         <span className="ml-auto font-semibold tabular-nums">
                             {segment.value}
                         </span>
@@ -903,8 +906,8 @@ export default function Dashboard({
                                             </Link>
                                         </div>
                                     </div>
-                                    <div className="rounded-[24px] bg-[#cbd7b8] p-4">
-                                        <p className="mb-2 text-sm font-semibold text-[#26412f]">
+                                    <div className="flex flex-col gap-3 rounded-[24px] bg-[#cbd7b8] p-5">
+                                        <p className="text-sm font-semibold text-[#26412f]">
                                             Case flow
                                         </p>
                                         <Donut segments={flow} />

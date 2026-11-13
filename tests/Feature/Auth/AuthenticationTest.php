@@ -57,13 +57,27 @@ test('users can not authenticate with invalid password', function () {
     $this->assertGuest();
 });
 
+test('a wrong password returns to the sign-in page with a clear error', function () {
+    $user = User::factory()->create();
+
+    $this->from(route('login'))
+        ->post(route('login.store'), [
+            'email' => $user->email,
+            'password' => 'wrong-password',
+        ])
+        ->assertRedirect(route('login'))
+        ->assertSessionHasErrors(['email' => __('auth.failed')]);
+
+    $this->assertGuest();
+});
+
 test('users can logout', function () {
     $user = User::factory()->create();
 
     $response = $this->actingAs($user)->post(route('logout'));
 
     $this->assertGuest();
-    $response->assertRedirect(route('home'));
+    $response->assertRedirect(route('login'));
 });
 
 test('users are rate limited', function () {
