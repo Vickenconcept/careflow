@@ -323,11 +323,24 @@ class PatientCaseController extends Controller
                         default => 'reviewed',
                     },
                     'uploaded_at' => $document->uploaded_at->toIso8601String(),
+                    'ai_state' => match (true) {
+                        $document->processing_status->isInProgress() => 'processing',
+                        $document->currentExtraction !== null || $document->currentSummary !== null => 'analysed',
+                        $document->aiProcessingBlockedReason() !== null => 'unavailable',
+                        default => 'not_analysed',
+                    },
                     'review_url' => route('organizations.documents.show', [
                         'current_team' => $current_team->slug,
                         'case' => $case->reference,
                         'document' => $document->uuid,
                     ]),
+                    'download_url' => $request->user()->can('download', $document)
+                        ? route('organizations.documents.download', [
+                            'current_team' => $current_team->slug,
+                            'case' => $case->reference,
+                            'document' => $document->uuid,
+                        ])
+                        : null,
                 ]),
                 'activities' => $case->activities->map(fn ($activity) => [
                     'id' => $activity->id,

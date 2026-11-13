@@ -80,7 +80,6 @@ export default function PortalIntake({
     departments,
     genderOptions,
     documentCategories,
-    consentVersions,
     initialLanguage,
 }: Props) {
     const [step, setStep] = useState(0);
@@ -176,13 +175,9 @@ export default function PortalIntake({
         }
 
         if (currentStep === 3) {
-            if (!form.data.enquiry_consent) {
+            if (!form.data.enquiry_consent || !form.data.health_data_consent) {
                 nextErrors.enquiry_consent =
-                    'You must accept the enquiry privacy notice.';
-            }
-            if (!form.data.health_data_consent) {
-                nextErrors.health_data_consent =
-                    'You must consent to health data processing.';
+                    'Please tick the required consent to send your enquiry.';
             }
         }
 
@@ -815,49 +810,51 @@ export default function PortalIntake({
                     ) : null}
 
                     {step === 3 ? (
-                        <div className="space-y-4 text-sm text-slate-700">
-                            <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500">
-                                Privacy notice version:{' '}
-                                {consentVersions.privacy_notice_version}
-                            </p>
-                            <label className="flex items-start gap-3 rounded-xl border border-slate-200 p-3">
+                        <div className="space-y-3 text-sm text-slate-700">
+                            <label
+                                className={cn(
+                                    'flex cursor-pointer items-start gap-3 rounded-2xl border p-4 transition-colors',
+                                    form.data.enquiry_consent
+                                        ? 'border-brand/50 bg-brand/5'
+                                        : 'border-slate-200',
+                                )}
+                            >
                                 <input
                                     type="checkbox"
-                                    className="mt-0.5 size-4 rounded border-slate-300"
+                                    className="mt-0.5 size-5 shrink-0 rounded border-slate-300 accent-[var(--brand)]"
                                     checked={form.data.enquiry_consent}
-                                    onChange={(e) =>
-                                        form.setData(
-                                            'enquiry_consent',
-                                            e.target.checked,
-                                        )
-                                    }
+                                    onChange={(e) => {
+                                        form.setData((data) => ({
+                                            ...data,
+                                            enquiry_consent: e.target.checked,
+                                            health_data_consent: e.target.checked,
+                                        }));
+                                    }}
                                 />
-                                <span>{t('enquiryConsent')}</span>
+                                <span className="flex-1 leading-relaxed">
+                                    {t('mainConsent')}
+                                </span>
+                                <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
+                                    {t('consentRequired')}
+                                </span>
                             </label>
                             <InputError
-                                message={allErrors.enquiry_consent}
+                                message={
+                                    allErrors.enquiry_consent ||
+                                    allErrors.health_data_consent
+                                }
                             />
-                            <label className="flex items-start gap-3 rounded-xl border border-slate-200 p-3">
+                            <label
+                                className={cn(
+                                    'flex cursor-pointer items-start gap-3 rounded-2xl border p-4 transition-colors',
+                                    form.data.ai_processing_consent
+                                        ? 'border-brand/50 bg-brand/5'
+                                        : 'border-slate-200',
+                                )}
+                            >
                                 <input
                                     type="checkbox"
-                                    className="mt-0.5 size-4 rounded border-slate-300"
-                                    checked={form.data.health_data_consent}
-                                    onChange={(e) =>
-                                        form.setData(
-                                            'health_data_consent',
-                                            e.target.checked,
-                                        )
-                                    }
-                                />
-                                <span>{t('healthConsent')}</span>
-                            </label>
-                            <InputError
-                                message={allErrors.health_data_consent}
-                            />
-                            <label className="flex items-start gap-3 rounded-xl border border-slate-200 p-3">
-                                <input
-                                    type="checkbox"
-                                    className="mt-0.5 size-4 rounded border-slate-300"
+                                    className="mt-0.5 size-5 shrink-0 rounded border-slate-300 accent-[var(--brand)]"
                                     checked={form.data.ai_processing_consent}
                                     onChange={(e) =>
                                         form.setData(
@@ -866,7 +863,12 @@ export default function PortalIntake({
                                         )
                                     }
                                 />
-                                <span>{t('aiConsent')}</span>
+                                <span className="flex-1 leading-relaxed">
+                                    {t('aiConsent')}
+                                </span>
+                                <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
+                                    {t('consentOptional')}
+                                </span>
                             </label>
                         </div>
                     ) : null}

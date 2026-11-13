@@ -25,7 +25,7 @@ class LogOutboundCommunicationSender implements OutboundCommunicationSender
     {
         $communication->loadMissing('case');
 
-        $reference = sprintf('cf-mock-%s', Str::uuid());
+        $reference = sprintf('cf-%s', Str::uuid());
 
         return match ($communication->channel) {
             CommunicationChannel::Email => $this->sendEmail($communication, $reference),

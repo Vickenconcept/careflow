@@ -36,6 +36,7 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { dashboard } from '@/routes';
 
@@ -77,6 +78,9 @@ type Props = {
         processing_status: string;
         processing_status_label: string;
         processing_error: string | null;
+        ai_unavailable_reason: string | null;
+        ai_available: boolean;
+        ai_switched_off: boolean;
         processing_in_progress: boolean;
         processing_steps: ProcessingStep[];
         original_language: string | null;
@@ -134,6 +138,7 @@ type Props = {
         canReviewAi: boolean;
         canDownload: boolean;
         canReprocess: boolean;
+        canManageSettings: boolean;
         canUpdateStatus: boolean;
     };
 };
@@ -207,6 +212,22 @@ export default function DocumentComparison({
             ai.extraction ||
             ai.summary,
     );
+    const aiUnavailable = !document.ai_available;
+    const aiSkippedEarlier =
+        document.ai_available &&
+        !hasAiOutput &&
+        !isProcessing &&
+        !isFailed &&
+        document.processing_error !== null;
+    const emptyAiLabel = (fallback: string) =>
+        aiUnavailable && !hasAiOutput ? 'Not available: AI analysis is off for this document' : fallback;
+    const runAi = () =>
+        reprocessForm.post(document.reprocess_url, {
+            preserveScroll: true,
+            onSuccess: () => {
+                router.reload({ only: ['document', 'ai', 'permissions'] });
+            },
+        });
 
     const reviewStatuses = [
         ai.extraction?.review_status,
@@ -316,45 +337,44 @@ export default function DocumentComparison({
                             <Bot className="size-3.5" />
                             <span className="ms-1">{ai.provider}</span>
                         </Badge>
-                        {ai.extraction?.is_synthetic ||
-                        ai.summary?.is_synthetic ? (
-                            <Badge className="rounded-full border border-violet-200 bg-violet-50 text-violet-700">
-                                <Sparkles className="size-3.5" />
-                                <span className="ms-1">Demo AI output</span>
-                            </Badge>
-                        ) : null}
                         {permissions.canReprocess ? (
-                            <Button
-                                type="button"
-                                variant="outline"
-                                className="rounded-xl"
-                                disabled={
-                                    reprocessForm.processing || isProcessing
-                                }
-                                onClick={() => {
-                                    reprocessForm.post(document.reprocess_url, {
-                                        preserveScroll: true,
-                                        onSuccess: () => {
-                                            router.reload({
-                                                only: [
-                                                    'document',
-                                                    'ai',
-                                                    'permissions',
-                                                ],
-                                            });
-                                        },
-                                    });
-                                }}
-                            >
-                                <RefreshCw
-                                    className={cn(
-                                        'size-4',
-                                        reprocessForm.processing &&
-                                            'animate-spin',
-                                    )}
-                                />
-                                Run AI again
-                            </Button>
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <span tabIndex={aiUnavailable ? 0 : -1}>
+                                        <Button
+                                            type="button"
+                                            variant={aiSkippedEarlier ? 'default' : 'outline'}
+                                            className="rounded-xl"
+                                            disabled={
+                                                aiUnavailable ||
+                                                reprocessForm.processing ||
+                                                isProcessing
+                                            }
+                                            onClick={runAi}
+                                        >
+                                            {hasAiOutput ? (
+                                                <RefreshCw
+                                                    className={cn(
+                                                        'size-4',
+                                                        reprocessForm.processing &&
+                                                            'animate-spin',
+                                                    )}
+                                                />
+                                            ) : (
+                                                <Sparkles className="size-4" />
+                                            )}
+                                            {hasAiOutput ? 'Run AI again' : 'Analyse with AI'}
+                                        </Button>
+                                    </span>
+                                </TooltipTrigger>
+                                <TooltipContent className="max-w-xs">
+                                    {aiUnavailable
+                                        ? document.ai_unavailable_reason
+                                        : hasAiOutput
+                                          ? 'Read, translate and summarise this document again.'
+                                          : 'Read, translate and summarise this document with AI.'}
+                                </TooltipContent>
+                            </Tooltip>
                         ) : null}
                         {permissions.canDownload ? (
                             <Button
@@ -515,16 +535,65 @@ export default function DocumentComparison({
                                 </p>
                                 {permissions.canReprocess ? (
                                     <p className="text-rose-700/90">
-                                        Fix{' '}
-                                        <code className="rounded bg-rose-100 px-1 py-0.5 text-xs">
-                                            OPENAI_API_KEY
-                                        </code>{' '}
-                                        if needed, ensure the queue worker is
-                                        running, then use Run AI again.
+                                        Try Run AI again in a few minutes. If
+                                        it keeps failing, contact your
+                                        CareFlow administrator.
                                     </p>
                                 ) : null}
                             </div>
                         </div>
+                    </div>
+                ) : null}
+
+                {aiUnavailable && !hasAiOutput && !isProcessing ? (
+                    <div className="flex flex-wrap items-start justify-between gap-3 rounded-2xl border border-amber-300/70 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
+                        <div className="flex items-start gap-2.5">
+                            <Bot className="mt-0.5 size-4 shrink-0" />
+                            <div>
+                                <p className="font-semibold">
+                                    AI analysis is not available for this document
+                                </p>
+                                <p className="mt-0.5">
+                                    {document.ai_unavailable_reason}
+                                </p>
+                            </div>
+                        </div>
+                        {document.ai_switched_off && permissions.canManageSettings ? (
+                            <Button asChild size="sm" className="rounded-full">
+                                <Link href={`/${team.slug}/organization/settings`}>
+                                    Turn on AI in settings
+                                </Link>
+                            </Button>
+                        ) : null}
+                    </div>
+                ) : null}
+
+                {aiSkippedEarlier ? (
+                    <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-brand/30 bg-brand/5 px-4 py-3 text-sm">
+                        <div className="flex items-start gap-2.5">
+                            <Sparkles className="mt-0.5 size-4 shrink-0 text-brand" />
+                            <div>
+                                <p className="font-semibold">
+                                    This document has not been analysed yet
+                                </p>
+                                <p className="mt-0.5 text-muted-foreground">
+                                    AI was not available when it arrived. It can
+                                    be read, translated and summarised now.
+                                </p>
+                            </div>
+                        </div>
+                        {permissions.canReprocess ? (
+                            <Button
+                                type="button"
+                                size="sm"
+                                className="rounded-full"
+                                disabled={reprocessForm.processing}
+                                onClick={runAi}
+                            >
+                                <Sparkles className="size-4" />
+                                Analyse with AI
+                            </Button>
+                        ) : null}
                     </div>
                 ) : null}
 
@@ -857,7 +926,7 @@ export default function DocumentComparison({
                                 icon={FileText}
                                 title="Extracted text"
                                 empty={!ai.extracted_text}
-                                emptyLabel="No extracted text yet"
+                                emptyLabel={emptyAiLabel('No extracted text yet')}
                             >
                                 {ai.extracted_text ? (
                                     <pre className="max-h-72 overflow-y-auto whitespace-pre-wrap text-sm leading-6 text-slate-700">
@@ -871,7 +940,7 @@ export default function DocumentComparison({
                                 title="Translation"
                                 hint={ai.disclaimer_translation}
                                 empty={!ai.translation}
-                                emptyLabel="No translation yet"
+                                emptyLabel={emptyAiLabel('No translation yet')}
                             >
                                 {ai.translation ? (
                                     <>
@@ -922,7 +991,7 @@ export default function DocumentComparison({
                                 title="Structured extraction"
                                 hint={ai.disclaimer_summary}
                                 empty={!ai.extraction}
-                                emptyLabel="No structured extraction yet"
+                                emptyLabel={emptyAiLabel('No structured extraction yet')}
                             >
                                 {ai.extraction ? (
                                     <pre className="max-h-72 overflow-auto rounded-xl border border-slate-200 bg-slate-50 p-3 font-mono text-xs text-slate-700">
@@ -943,7 +1012,7 @@ export default function DocumentComparison({
                                     ai.disclaimer_summary
                                 }
                                 empty={!ai.summary}
-                                emptyLabel="No summary yet"
+                                emptyLabel={emptyAiLabel('No summary yet')}
                             >
                                 {ai.summary ? (
                                     <pre className="max-h-72 overflow-auto rounded-xl border border-slate-200 bg-slate-50 p-3 font-mono text-xs text-slate-700">

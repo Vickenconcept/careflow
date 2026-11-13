@@ -4,6 +4,8 @@ import {
     ArrowRight,
     CalendarCheck,
     CalendarDays,
+    Download,
+    Eye,
     FileText,
     Globe2,
     History,
@@ -23,6 +25,7 @@ import { useState } from 'react';
 import type { ReactNode } from 'react';
 import InputError from '@/components/input-error';
 import PageTabs from '@/components/page-tabs';
+import { RowAction, RowActions } from '@/components/row-actions';
 import { ToggleField } from '@/components/toggle-field';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -91,6 +94,8 @@ type Props = {
             size_bytes: number;
             uploaded_at: string;
             review_url: string;
+            download_url: string | null;
+            ai_state: 'processing' | 'analysed' | 'unavailable' | 'not_analysed';
         }>;
         activities: Array<{
             id: number;
@@ -1299,38 +1304,69 @@ export default function CaseShow({
                             {patientCase.documents.map((document) => (
                                 <li
                                     key={document.uuid}
-                                    className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 text-sm"
+                                    className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 text-sm hover:bg-slate-50/70"
                                 >
-                                    <div className="min-w-0">
-                                        <Link
-                                            href={document.review_url}
-                                            className="font-medium text-brand hover:underline"
-                                        >
-                                            {document.original_filename}
-                                        </Link>
-                                        <div className="mt-0.5 text-xs text-slate-500">
-                                            {document.category} ·{' '}
-                                            {document.processing_status}
-                                            {document.ai_review ===
-                                            'unreviewed' ? (
-                                                <span className="ms-2 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 font-semibold text-amber-800">
-                                                    AI draft · needs review
+                                    <div className="flex min-w-0 items-center gap-3">
+                                        <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-brand/10 text-brand">
+                                            <FileText className="size-5" />
+                                        </span>
+                                        <div className="min-w-0">
+                                            <Link
+                                                href={document.review_url}
+                                                className="block truncate font-medium text-slate-900 hover:text-brand"
+                                            >
+                                                {document.original_filename}
+                                            </Link>
+                                            <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
+                                                <span>{document.category}</span>
+                                                <span aria-hidden="true">·</span>
+                                                <span>
+                                                    {Math.round(document.size_bytes / 1024)} KB
                                                 </span>
-                                            ) : null}
-                                            {document.ai_review ===
-                                            'reviewed' ? (
-                                                <span className="ms-2 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 font-semibold text-emerald-700">
-                                                    Reviewed
-                                                </span>
-                                            ) : null}
+                                                {document.ai_state === 'processing' ? (
+                                                    <span className="rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 font-semibold text-sky-800">
+                                                        AI processing
+                                                    </span>
+                                                ) : null}
+                                                {document.ai_state === 'unavailable' ? (
+                                                    <span className="rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 font-semibold text-slate-600">
+                                                        AI off · review the original
+                                                    </span>
+                                                ) : null}
+                                                {document.ai_state === 'not_analysed' ? (
+                                                    <span className="rounded-full border border-brand/30 bg-brand/5 px-2 py-0.5 font-semibold text-brand">
+                                                        Not analysed yet
+                                                    </span>
+                                                ) : null}
+                                                {document.ai_review === 'unreviewed' ? (
+                                                    <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 font-semibold text-amber-800">
+                                                        AI draft · needs review
+                                                    </span>
+                                                ) : null}
+                                                {document.ai_review === 'reviewed' ? (
+                                                    <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 font-semibold text-emerald-700">
+                                                        Reviewed
+                                                    </span>
+                                                ) : null}
+                                            </div>
                                         </div>
                                     </div>
-                                    <div className="text-xs text-slate-500">
-                                        {Math.round(
-                                            document.size_bytes / 1024,
-                                        )}{' '}
-                                        KB
-                                    </div>
+                                    <RowActions>
+                                        <RowAction
+                                            label="Open"
+                                            icon={Eye}
+                                            href={document.review_url}
+                                            tone="primary"
+                                            showLabel
+                                        />
+                                        {document.download_url ? (
+                                            <RowAction
+                                                label="Download original"
+                                                icon={Download}
+                                                nativeHref={document.download_url}
+                                            />
+                                        ) : null}
+                                    </RowActions>
                                 </li>
                             ))}
                         </ul>

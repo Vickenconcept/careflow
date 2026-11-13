@@ -79,6 +79,9 @@ class PatientDocumentController extends Controller
                 'processing_status' => $document->processing_status->value,
                 'processing_status_label' => $document->processing_status->label(),
                 'processing_error' => $document->processing_error,
+                'ai_unavailable_reason' => $aiUnavailableReason = $document->aiProcessingBlockedReason(),
+                'ai_available' => $aiUnavailableReason === null,
+                'ai_switched_off' => ! (bool) $current_team->organizationSetting?->ai_processing_enabled,
                 'processing_in_progress' => $document->processing_status->isInProgress(),
                 'processing_steps' => $document->processing_status->progressSteps(),
                 'original_language' => $document->original_language,
@@ -164,6 +167,7 @@ class PatientDocumentController extends Controller
                 'canDownload' => $request->user()->can('download', $document),
                 'canReprocess' => $request->user()->can('reprocess', $document),
                 'canUpdateStatus' => $request->user()->can('updateStatus', $case),
+                'canManageSettings' => $request->user()->can('manageSettings', $current_team),
             ],
         ]);
     }

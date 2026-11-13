@@ -75,7 +75,7 @@ class ValidatePatientDocument implements ShouldBeUnique, ShouldQueue
             return;
         }
 
-        // Mock pipeline stop-point: file is validated and waiting for AI adapters.
+        // Validation only: the file passed its checks and now waits for staff review.
         $document->update([
             'processing_status' => DocumentProcessingStatus::NeedsReview,
             'processing_error' => null,
