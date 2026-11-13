@@ -10,9 +10,11 @@ use App\Enums\CommunicationDirection;
 use App\Enums\CommunicationStatus;
 use App\Enums\DocumentCategory;
 use App\Enums\DocumentProcessingStatus;
+use App\Enums\TreatmentProposalPatientResponse;
 use App\Models\CaseCommunication;
 use App\Models\PatientCase;
 use App\Models\PatientDocument;
+use App\Models\TreatmentProposal;
 use App\Models\User;
 use App\Notifications\Patients\PatientPortalUpdateStaffNotification;
 use App\Support\PatientDocumentStorage;
@@ -33,6 +35,7 @@ class RecordPatientPortalSubmission
         private QueuePatientDocumentForProcessing $queueDocument,
         private CreateCaseTask $createTask,
         private CaseStatusTransitionMap $transitions,
+        private RecordTreatmentProposalPatientResponse $recordProposalResponse,
     ) {}
 
     /**
@@ -139,6 +142,24 @@ class RecordPatientPortalSubmission
         $this->alertStaff($case, 'Patient replied through the portal', 'message');
 
         return $communication;
+    }
+
+    /**
+     * The patient accepts or declines the proposal sent to them.
+     */
+    public function respondToProposal(PatientCase $case, TreatmentProposal $proposal, TreatmentProposalPatientResponse $response, ?string $notes): TreatmentProposal
+    {
+        $proposal = $this->recordProposalResponse->handle($proposal, null, $response, $notes);
+
+        $this->alertStaff(
+            $case,
+            $response === TreatmentProposalPatientResponse::Accepted
+                ? sprintf('Patient accepted proposal %s', $proposal->reference)
+                : sprintf('Patient declined proposal %s', $proposal->reference),
+            'proposal',
+        );
+
+        return $proposal;
     }
 
     private function alertStaff(PatientCase $case, string $title, string $kind): void

@@ -6,6 +6,7 @@ use App\Domains\Cases\CaseStatusTransitionMap;
 use App\Domains\Proposals\TreatmentProposalTransitionMap;
 use App\Enums\CaseActivityType;
 use App\Enums\CaseStatus;
+use App\Enums\MessageTemplateKey;
 use App\Enums\TreatmentProposalStatus;
 use App\Exceptions\InvalidTreatmentProposalTransitionException;
 use App\Models\TreatmentProposal;
@@ -19,11 +20,15 @@ class SendTreatmentProposal
         private TreatmentProposalTransitionMap $proposalTransitions,
         private CaseStatusTransitionMap $caseTransitions,
         private RecordCaseActivity $recordActivity,
+        private NotifyPatient $notifyPatient,
     ) {}
 
+    /**
+     * Mark the proposal as sent and email the patient a link to review, accept or decline it.
+     */
     public function handle(TreatmentProposal $proposal, User $actor): TreatmentProposal
     {
-        return DB::transaction(function () use ($proposal, $actor) {
+        $sent = DB::transaction(function () use ($proposal, $actor) {
             /** @var TreatmentProposal $locked */
             $locked = TreatmentProposal::query()->whereKey($proposal->id)->lockForUpdate()->firstOrFail();
 
@@ -89,5 +94,14 @@ class SendTreatmentProposal
 
             return $locked->fresh(['items']);
         });
+
+        $this->notifyPatient->handle(
+            case: $sent->case,
+            key: MessageTemplateKey::TreatmentProposalAvailable,
+            actor: $actor,
+            sendNow: true,
+        );
+
+        return $sent;
     }
 }

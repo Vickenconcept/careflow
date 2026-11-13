@@ -61,8 +61,8 @@ class EnsureDefaultMessageTemplates
             MessageTemplateKey::DocumentsReceived => $greeting.'We have received your documents for case {{case_reference}}. Our team will review them and contact you with next steps.'.$signoff,
             MessageTemplateKey::CaseAssignedForReview => $greeting.'Case {{case_reference}} has been assigned for clinical review. We will update you once the evaluation is complete.'.$signoff,
             MessageTemplateKey::EvaluationCompleted => $greeting.'The clinical evaluation for case {{case_reference}} has progressed. Your coordinator will share the next administrative steps.'.$signoff,
-            MessageTemplateKey::TreatmentProposalAvailable => $greeting.'A treatment proposal is available for case {{case_reference}}. Please review it and reply with your decision or questions.'.$signoff,
-            MessageTemplateKey::AppointmentConfirmation => $greeting.'Your appointment details for case {{case_reference}} have been confirmed by the hospital scheduling team. Your coordinator will share timing and location instructions.'.$signoff,
+            MessageTemplateKey::TreatmentProposalAvailable => $greeting.'A treatment proposal is ready for case {{case_reference}}. Use the button below to review it and accept or decline. If you have questions, you can send us a message from the same page.'.$signoff,
+            MessageTemplateKey::AppointmentConfirmation => $greeting.'Your appointment for case {{case_reference}} has been confirmed by the hospital. The details are below.'.$signoff,
             MessageTemplateKey::TravelInformation => $greeting.'Please find travel coordination guidance for case {{case_reference}}. Contact your coordinator if arrival or accommodation details change.'.$signoff,
             MessageTemplateKey::FollowUpReminder => $greeting.'This is a follow-up reminder for case {{case_reference}}. Please contact your coordinator if you need support.'.$signoff,
         };

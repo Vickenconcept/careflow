@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Organizations;
 
 use App\Actions\Patients\CreateCaseAppointment;
+use App\Actions\Patients\NotifyPatient;
 use App\Actions\Patients\TransitionCaseAppointment;
 use App\Actions\Patients\UpdateCaseAppointment;
 use App\Exceptions\InvalidAppointmentTransitionException;
@@ -101,7 +102,7 @@ class CaseAppointmentController extends Controller
 
         Inertia::flash('toast', [
             'type' => 'success',
-            'message' => __('Appointment status updated.'),
+            'message' => trim(__('Appointment status updated.').' '.(app(NotifyPatient::class)->staffSummary() ?? '')),
         ]);
 
         return to_route('organizations.cases.show', [

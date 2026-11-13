@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Actions\Patients\NotifyPatient;
 use App\Contracts\Communications\OutboundCommunicationSender;
 use App\Contracts\Documents\DocumentClassifier;
 use App\Contracts\Documents\DocumentLanguageDetector;
@@ -141,6 +142,9 @@ class AppServiceProvider extends ServiceProvider
                 ),
             };
         });
+
+        // One instance per request, so controllers can read what the patient was told.
+        $this->app->scoped(NotifyPatient::class);
     }
 
     /**

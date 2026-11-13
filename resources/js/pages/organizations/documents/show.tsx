@@ -36,7 +36,11 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { dashboard } from '@/routes';
 
@@ -207,10 +211,7 @@ export default function DocumentComparison({
         document.processing_status === 'completed' ||
         document.processing_status === 'needs_review';
     const hasAiOutput = Boolean(
-        ai.extracted_text ||
-            ai.translation ||
-            ai.extraction ||
-            ai.summary,
+        ai.extracted_text || ai.translation || ai.extraction || ai.summary,
     );
     const aiUnavailable = !document.ai_available;
     const aiSkippedEarlier =
@@ -220,7 +221,9 @@ export default function DocumentComparison({
         !isFailed &&
         document.processing_error !== null;
     const emptyAiLabel = (fallback: string) =>
-        aiUnavailable && !hasAiOutput ? 'Not available: AI analysis is off for this document' : fallback;
+        aiUnavailable && !hasAiOutput
+            ? 'Not available: AI analysis is off for this document'
+            : fallback;
     const runAi = () =>
         reprocessForm.post(document.reprocess_url, {
             preserveScroll: true,
@@ -265,13 +268,16 @@ export default function DocumentComparison({
     useEffect(() => {
         const refresh = () => {
             if (window.document.visibilityState === 'visible') {
-                router.reload({ only: ['document', 'ai', 'permissions', 'navigation'] });
+                router.reload({
+                    only: ['document', 'ai', 'permissions', 'navigation'],
+                });
             }
         };
 
         window.document.addEventListener('visibilitychange', refresh);
 
-        return () => window.document.removeEventListener('visibilitychange', refresh);
+        return () =>
+            window.document.removeEventListener('visibilitychange', refresh);
     }, []);
 
     // When a new AI version arrives, start the correction editors from it.
@@ -370,7 +376,11 @@ export default function DocumentComparison({
                                     <span tabIndex={aiUnavailable ? 0 : -1}>
                                         <Button
                                             type="button"
-                                            variant={aiSkippedEarlier ? 'default' : 'outline'}
+                                            variant={
+                                                aiSkippedEarlier
+                                                    ? 'default'
+                                                    : 'outline'
+                                            }
                                             className="rounded-xl"
                                             disabled={
                                                 aiUnavailable ||
@@ -390,7 +400,9 @@ export default function DocumentComparison({
                                             ) : (
                                                 <Sparkles className="size-4" />
                                             )}
-                                            {hasAiOutput ? 'Run AI again' : 'Analyse with AI'}
+                                            {hasAiOutput
+                                                ? 'Run AI again'
+                                                : 'Analyse with AI'}
                                         </Button>
                                     </span>
                                 </TooltipTrigger>
@@ -517,9 +529,9 @@ export default function DocumentComparison({
                     {canConfirmReview ? (
                         <p className="w-full text-xs text-slate-500">
                             “Mark reviewed” records that you checked this AI
-                            draft. It does not approve any clinical content.
-                            Use “Save corrections” below if something needs
-                            fixing first.
+                            draft. It does not approve any clinical content. Use
+                            “Save corrections” below if something needs fixing
+                            first.
                         </p>
                     ) : null}
                 </div>
@@ -534,10 +546,10 @@ export default function DocumentComparison({
                                         AI assist is running in the background
                                     </p>
                                     <p className="mt-1 text-sky-800/90">
-                                        This usually takes a minute or two.
-                                        The page updates on its own as each
-                                        step finishes, and you can keep
-                                        working in the meantime.
+                                        This usually takes a minute or two. The
+                                        page updates on its own as each step
+                                        finishes, and you can keep working in
+                                        the meantime.
                                     </p>
                                 </div>
                                 <ProcessingSteps
@@ -559,9 +571,9 @@ export default function DocumentComparison({
                                 </p>
                                 {permissions.canReprocess ? (
                                     <p className="text-rose-700/90">
-                                        Try Run AI again in a few minutes. If
-                                        it keeps failing, contact your
-                                        CareFlow administrator.
+                                        Try Run AI again in a few minutes. If it
+                                        keeps failing, contact your CareFlow
+                                        administrator.
                                     </p>
                                 ) : null}
                             </div>
@@ -575,16 +587,20 @@ export default function DocumentComparison({
                             <Bot className="mt-0.5 size-4 shrink-0" />
                             <div>
                                 <p className="font-semibold">
-                                    AI analysis is not available for this document
+                                    AI analysis is not available for this
+                                    document
                                 </p>
                                 <p className="mt-0.5">
                                     {document.ai_unavailable_reason}
                                 </p>
                             </div>
                         </div>
-                        {document.ai_switched_off && permissions.canManageSettings ? (
+                        {document.ai_switched_off &&
+                        permissions.canManageSettings ? (
                             <Button asChild size="sm" className="rounded-full">
-                                <Link href={`/${team.slug}/organization/settings`}>
+                                <Link
+                                    href={`/${team.slug}/organization/settings`}
+                                >
                                     Turn on AI in settings
                                 </Link>
                             </Button>
@@ -671,9 +687,7 @@ export default function DocumentComparison({
                             <div className="grid gap-2">
                                 <Label htmlFor="next_status">Next status</Label>
                                 <Select
-                                    value={
-                                        statusForm.data.status || undefined
-                                    }
+                                    value={statusForm.data.status || undefined}
                                     onValueChange={(value) =>
                                         statusForm.setData('status', value)
                                     }
@@ -746,9 +760,17 @@ export default function DocumentComparison({
                         active={view}
                         onSelect={(id) => chooseView(id as DocumentView)}
                         tabs={[
-                            { id: 'document', label: 'Document', icon: FileText },
+                            {
+                                id: 'document',
+                                label: 'Document',
+                                icon: FileText,
+                            },
                             { id: 'assist', label: 'AI assist', icon: Bot },
-                            { id: 'split', label: 'Side by side', icon: Columns2 },
+                            {
+                                id: 'split',
+                                label: 'Side by side',
+                                icon: Columns2,
+                            },
                         ]}
                     />
                     <p className="text-xs text-muted-foreground">
@@ -805,7 +827,9 @@ export default function DocumentComparison({
                                         aria-label="Zoom out"
                                         disabled={zoom <= 50}
                                         onClick={() =>
-                                            setZoom((value) => Math.max(50, value - 25))
+                                            setZoom((value) =>
+                                                Math.max(50, value - 25),
+                                            )
                                         }
                                     >
                                         <ZoomOut className="size-4" />
@@ -821,7 +845,9 @@ export default function DocumentComparison({
                                         aria-label="Zoom in"
                                         disabled={zoom >= 300}
                                         onClick={() =>
-                                            setZoom((value) => Math.min(300, value + 25))
+                                            setZoom((value) =>
+                                                Math.min(300, value + 25),
+                                            )
                                         }
                                     >
                                         <ZoomIn className="size-4" />
@@ -845,7 +871,9 @@ export default function DocumentComparison({
                                                 aria-label="Previous page"
                                                 disabled={pdfPage <= 1}
                                                 onClick={() =>
-                                                    setPdfPage((value) => Math.max(1, value - 1))
+                                                    setPdfPage((value) =>
+                                                        Math.max(1, value - 1),
+                                                    )
                                                 }
                                             >
                                                 <ArrowLeft className="size-4" />
@@ -859,7 +887,11 @@ export default function DocumentComparison({
                                                 variant="outline"
                                                 className="size-8 rounded-full"
                                                 aria-label="Next page"
-                                                onClick={() => setPdfPage((value) => value + 1)}
+                                                onClick={() =>
+                                                    setPdfPage(
+                                                        (value) => value + 1,
+                                                    )
+                                                }
                                             >
                                                 <ArrowRight className="size-4" />
                                             </Button>
@@ -875,7 +907,10 @@ export default function DocumentComparison({
                                             alt={document.original_filename}
                                             style={{
                                                 width: `${zoom}%`,
-                                                maxWidth: zoom > 100 ? 'none' : '100%',
+                                                maxWidth:
+                                                    zoom > 100
+                                                        ? 'none'
+                                                        : '100%',
                                             }}
                                             className="object-contain"
                                         />
@@ -950,10 +985,12 @@ export default function DocumentComparison({
                                 icon={FileText}
                                 title="Extracted text"
                                 empty={!ai.extracted_text}
-                                emptyLabel={emptyAiLabel('No extracted text yet')}
+                                emptyLabel={emptyAiLabel(
+                                    'No extracted text yet',
+                                )}
                             >
                                 {ai.extracted_text ? (
-                                    <pre className="max-h-72 overflow-y-auto whitespace-pre-wrap text-sm leading-6 text-slate-700">
+                                    <pre className="max-h-72 overflow-y-auto text-sm leading-6 whitespace-pre-wrap text-slate-700">
                                         {ai.extracted_text}
                                     </pre>
                                 ) : null}
@@ -972,7 +1009,7 @@ export default function DocumentComparison({
                                             {ai.translation.source_language} →{' '}
                                             {ai.translation.target_language}
                                         </p>
-                                        <pre className="max-h-72 overflow-y-auto whitespace-pre-wrap text-sm leading-6 text-slate-700">
+                                        <pre className="max-h-72 overflow-y-auto text-sm leading-6 whitespace-pre-wrap text-slate-700">
                                             {ai.translation.translated_text}
                                         </pre>
                                         {ai.translation.signed_off ? (
@@ -989,11 +1026,16 @@ export default function DocumentComparison({
                                                 size="sm"
                                                 variant="outline"
                                                 className="mt-3 rounded-full"
-                                                disabled={signOffForm.processing}
+                                                disabled={
+                                                    signOffForm.processing
+                                                }
                                                 onClick={() =>
                                                     signOffForm.post(
-                                                        ai.translation!.sign_off_url,
-                                                        { preserveScroll: true },
+                                                        ai.translation!
+                                                            .sign_off_url,
+                                                        {
+                                                            preserveScroll: true,
+                                                        },
                                                     )
                                                 }
                                             >
@@ -1014,7 +1056,9 @@ export default function DocumentComparison({
                                 title="Structured extraction"
                                 hint={ai.disclaimer_summary}
                                 empty={!ai.extraction}
-                                emptyLabel={emptyAiLabel('No structured extraction yet')}
+                                emptyLabel={emptyAiLabel(
+                                    'No structured extraction yet',
+                                )}
                             >
                                 {ai.extraction ? (
                                     <pre className="max-h-72 overflow-auto rounded-xl border border-slate-200 bg-slate-50 p-3 font-mono text-xs text-slate-700">
@@ -1217,7 +1261,9 @@ function AssistPanel({
         <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_10px_30px_-24px_rgba(15,23,42,0.35)]">
             <div className="flex items-center gap-2 border-b border-slate-100 px-4 py-3">
                 <Icon className="size-4 text-slate-400" />
-                <h3 className="text-sm font-semibold text-slate-900">{title}</h3>
+                <h3 className="text-sm font-semibold text-slate-900">
+                    {title}
+                </h3>
             </div>
             <div className="space-y-2 p-4">
                 {hint ? (

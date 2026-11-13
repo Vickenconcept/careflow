@@ -36,13 +36,268 @@ type Props = {
         location: string | null;
         instructions: string | null;
     }>;
+    proposal?: PortalProposal | null;
     timezone?: string;
-    notice?: 'documents' | 'message' | null;
+    notice?:
+        | 'documents'
+        | 'message'
+        | 'proposal_accepted'
+        | 'proposal_declined'
+        | 'proposal_closed'
+        | null;
     canRespond?: boolean;
     canReply?: boolean;
 };
 
+type PortalProposal = {
+    id: string;
+    reference: string;
+    procedure: string | null;
+    estimated_cost: string | null;
+    currency: string | null;
+    expected_duration: string | null;
+    additional_information: string | null;
+    valid_until: string | null;
+    status: 'awaiting_response' | 'accepted' | 'declined' | 'expired';
+    can_respond: boolean;
+    items: Array<{
+        description: string;
+        quantity: number;
+        unit_cost: string | null;
+        currency: string | null;
+    }>;
+};
+
 const STAGES = [1, 2, 3, 4, 5, 6];
+
+function formatMoney(
+    amount: string,
+    currency: string | null,
+    locale: string,
+): string {
+    try {
+        return new Intl.NumberFormat(locale, {
+            style: currency ? 'currency' : 'decimal',
+            currency: currency ?? undefined,
+            maximumFractionDigits: 2,
+        }).format(Number(amount));
+    } catch {
+        return `${amount} ${currency ?? ''}`.trim();
+    }
+}
+
+/**
+ * The treatment proposal sent to the patient, with buttons to accept or decline it.
+ */
+function ProposalCard({
+    proposal,
+    casePath,
+    token,
+    locale,
+    t,
+}: {
+    proposal: PortalProposal;
+    casePath: string;
+    token: string;
+    locale: string;
+    t: (key: string) => string;
+}) {
+    const form = useForm({ token, response: '', notes: '' });
+    const [declining, setDeclining] = useState(false);
+
+    const respond = (response: 'accepted' | 'declined') => {
+        form.transform((data) => ({ ...data, response }));
+        form.post(`${casePath}/proposals/${proposal.id}/respond`, {
+            preserveScroll: true,
+        });
+    };
+
+    const statusText: Record<PortalProposal['status'], string> = {
+        awaiting_response: t('proposalAwaiting'),
+        accepted: t('proposalAccepted'),
+        declined: t('proposalDeclined'),
+        expired: t('proposalExpired'),
+    };
+
+    return (
+        <section className="space-y-3">
+            <h2 className="text-sm font-semibold text-slate-900">
+                {t('proposalTitle')}
+            </h2>
+            <div
+                className={cn(
+                    'space-y-4 rounded-xl border p-4 text-sm',
+                    proposal.status === 'awaiting_response'
+                        ? 'border-brand/40 bg-brand/5'
+                        : 'border-slate-200',
+                )}
+            >
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div>
+                        <p className="font-semibold text-slate-900">
+                            {proposal.procedure ?? t('proposalTitle')}
+                        </p>
+                        <p className="font-mono text-xs text-slate-500">
+                            {proposal.reference}
+                        </p>
+                    </div>
+                    <span
+                        className={cn(
+                            'rounded-full px-2.5 py-1 text-xs font-medium',
+                            proposal.status === 'accepted' &&
+                                'bg-emerald-100 text-emerald-800',
+                            proposal.status === 'declined' &&
+                                'bg-slate-100 text-slate-700',
+                            proposal.status === 'expired' &&
+                                'bg-amber-100 text-amber-900',
+                            proposal.status === 'awaiting_response' &&
+                                'bg-brand text-white',
+                        )}
+                    >
+                        {statusText[proposal.status]}
+                    </span>
+                </div>
+
+                <dl className="grid grid-cols-2 gap-3">
+                    {proposal.estimated_cost ? (
+                        <div>
+                            <dt className="text-xs text-slate-500">
+                                {t('proposalCost')}
+                            </dt>
+                            <dd className="font-semibold text-slate-900">
+                                {formatMoney(
+                                    proposal.estimated_cost,
+                                    proposal.currency,
+                                    locale,
+                                )}
+                            </dd>
+                        </div>
+                    ) : null}
+                    {proposal.expected_duration ? (
+                        <div>
+                            <dt className="text-xs text-slate-500">
+                                {t('proposalDuration')}
+                            </dt>
+                            <dd className="font-semibold text-slate-900">
+                                {proposal.expected_duration}
+                            </dd>
+                        </div>
+                    ) : null}
+                    {proposal.valid_until ? (
+                        <div className="col-span-2">
+                            <dt className="text-xs text-slate-500">
+                                {t('proposalValidUntil')}
+                            </dt>
+                            <dd className="text-slate-800">
+                                {formatWhen(
+                                    proposal.valid_until,
+                                    locale,
+                                    'UTC',
+                                    false,
+                                )}
+                            </dd>
+                        </div>
+                    ) : null}
+                </dl>
+
+                {proposal.items.length > 0 ? (
+                    <ul className="divide-y divide-slate-200 rounded-lg border border-slate-200 bg-white">
+                        {proposal.items.map((item, index) => (
+                            <li
+                                key={index}
+                                className="flex items-center justify-between gap-3 px-3 py-2"
+                            >
+                                <span className="text-slate-800">
+                                    {item.quantity > 1
+                                        ? `${item.quantity} × `
+                                        : ''}
+                                    {item.description}
+                                </span>
+                                {item.unit_cost ? (
+                                    <span className="shrink-0 text-slate-600">
+                                        {formatMoney(
+                                            item.unit_cost,
+                                            item.currency ?? proposal.currency,
+                                            locale,
+                                        )}
+                                    </span>
+                                ) : null}
+                            </li>
+                        ))}
+                    </ul>
+                ) : null}
+
+                {proposal.additional_information ? (
+                    <p className="whitespace-pre-line text-slate-700">
+                        {proposal.additional_information}
+                    </p>
+                ) : null}
+
+                {proposal.can_respond ? (
+                    declining ? (
+                        <div className="space-y-2">
+                            <label
+                                htmlFor="decline-notes"
+                                className="text-xs font-medium text-slate-700"
+                            >
+                                {t('proposalDeclineReason')}
+                            </label>
+                            <textarea
+                                id="decline-notes"
+                                className="min-h-20 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                                value={form.data.notes}
+                                onChange={(event) =>
+                                    form.setData('notes', event.target.value)
+                                }
+                            />
+                            <div className="flex flex-wrap gap-2">
+                                <button
+                                    type="button"
+                                    disabled={form.processing}
+                                    onClick={() => respond('declined')}
+                                    className="h-10 rounded-full bg-slate-800 px-5 text-sm font-semibold text-white disabled:opacity-60"
+                                >
+                                    {t('proposalConfirmDecline')}
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setDeclining(false)}
+                                    className="h-10 rounded-full border border-slate-200 px-5 text-sm font-medium text-slate-700"
+                                >
+                                    {t('cancel')}
+                                </button>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="space-y-2">
+                            <div className="flex flex-wrap gap-2">
+                                <button
+                                    type="button"
+                                    disabled={form.processing}
+                                    onClick={() => respond('accepted')}
+                                    className="inline-flex h-11 items-center gap-1.5 rounded-full bg-brand px-6 text-sm font-semibold text-white disabled:opacity-60"
+                                >
+                                    <Check className="size-4" />
+                                    {t('proposalAccept')}
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setDeclining(true)}
+                                    className="h-11 rounded-full border border-slate-200 bg-white px-6 text-sm font-medium text-slate-700"
+                                >
+                                    {t('proposalDecline')}
+                                </button>
+                            </div>
+                            <p className="text-xs text-slate-500">
+                                {t('proposalQuestions')}
+                            </p>
+                        </div>
+                    )
+                ) : null}
+            </div>
+        </section>
+    );
+}
 
 function formatWhen(
     value: string,
@@ -66,6 +321,7 @@ export default function CaseTracking({
     case: patientCase,
     messages = [],
     appointments = [],
+    proposal = null,
     timezone = 'UTC',
     notice = null,
     canRespond = false,
@@ -146,7 +402,9 @@ export default function CaseTracking({
                     >
                         {notice === 'documents'
                             ? t('filesSent')
-                            : t('replySent')}
+                            : notice === 'message'
+                              ? t('replySent')
+                              : t(`notice_${notice}`)}
                     </p>
                 ) : null}
 
@@ -169,6 +427,16 @@ export default function CaseTracking({
                         {t(`state_${patientCase.state}`)}
                     </p>
                 </div>
+
+                {proposal ? (
+                    <ProposalCard
+                        proposal={proposal}
+                        casePath={casePath}
+                        token={token}
+                        locale={locale}
+                        t={t}
+                    />
+                ) : null}
 
                 {appointments.length > 0 ? (
                     <section className="space-y-3">
@@ -425,10 +693,7 @@ export default function CaseTracking({
                 ) : null}
 
                 {stage !== null ? (
-                    <ol
-                        className="space-y-0"
-                        aria-label={t('whatThisMeans')}
-                    >
+                    <ol className="space-y-0" aria-label={t('whatThisMeans')}>
                         {STAGES.map((number) => {
                             const done = number < stage;
                             const current = number === stage;

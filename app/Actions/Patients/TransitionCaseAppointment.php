@@ -7,6 +7,7 @@ use App\Domains\Integrations\His\Contracts\HisSchedulingAdapter;
 use App\Enums\AppointmentConfirmationSource;
 use App\Enums\AppointmentStatus;
 use App\Enums\CaseActivityType;
+use App\Enums\MessageTemplateKey;
 use App\Exceptions\InvalidAppointmentTransitionException;
 use App\Models\CaseAppointment;
 use App\Models\User;
@@ -19,6 +20,7 @@ class TransitionCaseAppointment
         private AppointmentTransitionMap $transitions,
         private RecordCaseActivity $recordActivity,
         private HisSchedulingAdapter $hisSchedulingAdapter,
+        private NotifyPatient $notifyPatient,
     ) {}
 
     /**
@@ -36,7 +38,7 @@ class TransitionCaseAppointment
      */
     public function handle(CaseAppointment $appointment, User $actor, array $data): CaseAppointment
     {
-        return DB::transaction(function () use ($appointment, $actor, $data) {
+        $appointment = DB::transaction(function () use ($appointment, $actor, $data) {
             /** @var CaseAppointment $locked */
             $locked = CaseAppointment::query()->whereKey($appointment->id)->lockForUpdate()->firstOrFail();
 
@@ -76,6 +78,36 @@ class TransitionCaseAppointment
 
             return $locked->fresh(['department', 'doctor:id,name,email', 'createdBy:id,name', 'confirmedBy:id,name']);
         });
+
+        if ($appointment->status === AppointmentStatus::Confirmed && $data['action'] === 'confirm') {
+            $this->notifyPatient->handle(
+                case: $appointment->case,
+                key: MessageTemplateKey::AppointmentConfirmation,
+                actor: $actor,
+                sendNow: true,
+                details: $this->appointmentDetails($appointment),
+            );
+        }
+
+        return $appointment;
+    }
+
+    /**
+     * Date, time and place of a confirmed appointment, in the hospital's time zone.
+     */
+    protected function appointmentDetails(CaseAppointment $appointment): string
+    {
+        $appointment->loadMissing(['case.team.organizationSetting', 'department']);
+        $timezone = $appointment->case->team->organizationSetting?->timezone ?: config('app.timezone');
+        $startsAt = $appointment->confirmed_starts_at?->copy()->setTimezone($timezone);
+
+        return collect([
+            'Appointment: '.$appointment->appointment_type->label(),
+            $startsAt !== null ? 'When: '.$startsAt->format('l j F Y, H:i').' ('.$timezone.')' : null,
+            $appointment->department?->name ? 'Department: '.$appointment->department->name : null,
+            filled($appointment->location) ? 'Where: '.$appointment->location : null,
+            filled($appointment->meeting_instructions) ? 'Instructions: '.$appointment->meeting_instructions : null,
+        ])->filter()->implode("\n");
     }
 
     protected function resolveTargetStatus(string $action): AppointmentStatus

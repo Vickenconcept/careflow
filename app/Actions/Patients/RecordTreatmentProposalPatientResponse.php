@@ -26,7 +26,7 @@ class RecordTreatmentProposalPatientResponse
 
     public function handle(
         TreatmentProposal $proposal,
-        User $actor,
+        ?User $actor,
         TreatmentProposalPatientResponse $response,
         ?string $notes = null,
     ): TreatmentProposal {
@@ -121,7 +121,9 @@ class RecordTreatmentProposalPatientResponse
                     'proposal_uuid' => $proposal->uuid,
                     'trigger' => WorkflowKey::TreatmentCoordination->trigger(),
                 ],
-                actor: $actor,
+                // A patient answering in the portal has no staff account, so the
+                // case coordinator owns the follow-up work.
+                actor: $actor ?? $case->assignedCoordinator,
             );
         }
 

@@ -116,6 +116,11 @@ class SubmitDoctorReview
                 context: [
                     'doctor_review_uuid' => $review->uuid,
                     'trigger' => WorkflowKey::AdditionalDocuments->trigger(),
+                    // Shown in the draft message so the patient knows what to send.
+                    // It stays a draft until a coordinator approves the wording.
+                    'message_details' => filled($review->additional_information_request)
+                        ? "What we need from you:\n".trim((string) $review->additional_information_request)
+                        : null,
                 ],
                 actor: $reviewer,
             );

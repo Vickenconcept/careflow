@@ -70,6 +70,9 @@ Route::prefix('p/{organization}')
         Route::post('cases/{reference}/messages', [PatientCaseTrackingController::class, 'reply'])
             ->middleware('throttle:20,1')
             ->name('portal.cases.messages.store');
+        Route::post('cases/{reference}/proposals/{proposal}/respond', [PatientCaseTrackingController::class, 'respondToProposal'])
+            ->middleware('throttle:10,1')
+            ->name('portal.cases.proposals.respond');
         Route::get('cases/{reference}', [PatientCaseTrackingController::class, 'show'])
             ->middleware('throttle:60,1')
             ->name('portal.cases.show');
@@ -211,6 +214,10 @@ Route::prefix('{current_team}')
                 ->name('organizations.communications.store');
             Route::post('cases/{case}/communications/{communication}/approve', [CaseCommunicationController::class, 'approve'])
                 ->name('organizations.communications.approve');
+            Route::patch('cases/{case}/communications/{communication}', [CaseCommunicationController::class, 'update'])
+                ->name('organizations.communications.update');
+            Route::delete('cases/{case}/communications/{communication}', [CaseCommunicationController::class, 'destroy'])
+                ->name('organizations.communications.destroy');
         });
 
         Route::post('cases/{case}/follow-ups', [PatientFollowUpController::class, 'store'])

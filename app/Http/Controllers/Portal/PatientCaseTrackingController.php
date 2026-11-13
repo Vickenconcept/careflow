@@ -8,13 +8,17 @@ use App\Enums\CommunicationChannel;
 use App\Enums\CommunicationDirection;
 use App\Enums\CommunicationStatus;
 use App\Enums\DocumentCategory;
+use App\Enums\TreatmentProposalPatientResponse;
+use App\Enums\TreatmentProposalStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Portal\ReplyPortalMessageRequest;
+use App\Http\Requests\Portal\RespondToProposalRequest;
 use App\Http\Requests\Portal\UploadPortalDocumentsRequest;
 use App\Models\CaseAppointment;
 use App\Models\CaseCommunication;
 use App\Models\PatientCase;
 use App\Models\Team;
+use App\Models\TreatmentProposal;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
@@ -58,6 +62,7 @@ class PatientCaseTrackingController extends Controller
             ],
             'messages' => $organization->moduleEnabled('communications') ? $this->portalMessages($case) : [],
             'appointments' => $organization->moduleEnabled('appointments') ? $this->portalAppointments($case) : [],
+            'proposal' => $organization->moduleEnabled('proposals') ? $this->portalProposal($case) : null,
             'timezone' => $organization->organizationSetting?->timezone ?: 'UTC',
             'notice' => session('portal_notice'),
             'canRespond' => $case->status->patientJourneyStage() !== null,
@@ -67,7 +72,7 @@ class PatientCaseTrackingController extends Controller
 
     /**
      * The patient-visible thread: approved staff messages addressed to the portal,
-     * plus the patient's own replies. Internal notes, drafts and other channels stay hidden.
+     * emails that were actually sent, plus the patient's own replies. Internal notes, drafts and other channels stay hidden.
      *
      * @return list<array{id: string, subject: string|null, body: string, sent_at: string|null, from_patient: bool}>
      */
@@ -75,14 +80,19 @@ class PatientCaseTrackingController extends Controller
     {
         return CaseCommunication::query()
             ->where('patient_case_id', $case->id)
-            ->where('channel', CommunicationChannel::PatientPortal)
             ->where(function ($query): void {
-                $query->where(function ($staff): void {
-                    $staff->where('direction', CommunicationDirection::Outbound)
+                $query->where(function ($portal): void {
+                    $portal->where('channel', CommunicationChannel::PatientPortal)
+                        ->where('direction', CommunicationDirection::Outbound)
                         ->whereIn('status', [CommunicationStatus::Approved, CommunicationStatus::Sent])
                         ->whereNotNull('approved_at');
+                })->orWhere(function ($email): void {
+                    $email->where('channel', CommunicationChannel::Email)
+                        ->where('direction', CommunicationDirection::Outbound)
+                        ->where('status', CommunicationStatus::Sent);
                 })->orWhere(function ($patient): void {
-                    $patient->where('direction', CommunicationDirection::Inbound)
+                    $patient->where('channel', CommunicationChannel::PatientPortal)
+                        ->where('direction', CommunicationDirection::Inbound)
                         ->where('status', CommunicationStatus::Logged);
                 });
             })
@@ -164,6 +174,84 @@ class PatientCaseTrackingController extends Controller
         $submission->reply($case, $request->string('body')->toString());
 
         return $this->backToTracking($organization, $case, $request->string('token')->toString(), 'message');
+    }
+
+    public function respondToProposal(
+        RespondToProposalRequest $request,
+        Team $organization,
+        string $reference,
+        string $proposal,
+        RecordPatientPortalSubmission $submission,
+    ): RedirectResponse {
+        $token = $request->string('token')->toString();
+        $case = $this->openCaseForToken($organization, $reference, $token);
+
+        $treatmentProposal = TreatmentProposal::query()
+            ->where('patient_case_id', $case->id)
+            ->where('uuid', $proposal)
+            ->where('is_current', true)
+            ->firstOrFail();
+
+        if ($treatmentProposal->status !== TreatmentProposalStatus::SentToPatient || $treatmentProposal->isExpired()) {
+            return $this->backToTracking($organization, $case, $token, 'proposal_closed');
+        }
+
+        $response = TreatmentProposalPatientResponse::from($request->string('response')->toString());
+        $submission->respondToProposal($case, $treatmentProposal, $response, $request->input('notes'));
+
+        return $this->backToTracking(
+            $organization,
+            $case,
+            $token,
+            $response === TreatmentProposalPatientResponse::Accepted ? 'proposal_accepted' : 'proposal_declined',
+        );
+    }
+
+    /**
+     * The proposal the patient was sent (or already answered), without internal approval details.
+     *
+     * @return array{id: string, reference: string, procedure: string|null, estimated_cost: string|null, currency: string|null, expected_duration: string|null, additional_information: string|null, valid_until: string|null, status: string, can_respond: bool, items: list<array{description: string, quantity: int, unit_cost: string|null, currency: string|null}>}|null
+     */
+    protected function portalProposal(PatientCase $case): ?array
+    {
+        $proposal = TreatmentProposal::query()
+            ->where('patient_case_id', $case->id)
+            ->where('is_current', true)
+            ->whereIn('status', [
+                TreatmentProposalStatus::SentToPatient,
+                TreatmentProposalStatus::PatientAccepted,
+                TreatmentProposalStatus::PatientDeclined,
+            ])
+            ->with('items')
+            ->latest('sent_at')
+            ->first();
+
+        if ($proposal === null) {
+            return null;
+        }
+
+        return [
+            'id' => $proposal->uuid,
+            'reference' => $proposal->reference,
+            'procedure' => $proposal->proposed_procedure,
+            'estimated_cost' => $proposal->estimated_cost !== null ? (string) $proposal->estimated_cost : null,
+            'currency' => $proposal->currency,
+            'expected_duration' => $proposal->expected_duration !== null ? (string) $proposal->expected_duration : null,
+            'additional_information' => $proposal->additional_information,
+            'valid_until' => $proposal->valid_until?->toDateString(),
+            'status' => match ($proposal->status) {
+                TreatmentProposalStatus::PatientAccepted => 'accepted',
+                TreatmentProposalStatus::PatientDeclined => 'declined',
+                default => $proposal->isExpired() ? 'expired' : 'awaiting_response',
+            },
+            'can_respond' => $proposal->status === TreatmentProposalStatus::SentToPatient && ! $proposal->isExpired(),
+            'items' => $proposal->items->map(fn ($item) => [
+                'description' => $item->description,
+                'quantity' => (int) $item->quantity,
+                'unit_cost' => $item->unit_cost !== null ? (string) $item->unit_cost : null,
+                'currency' => $item->currency,
+            ])->values()->all(),
+        ];
     }
 
     protected function openCaseForToken(Team $organization, string $reference, string $token): PatientCase

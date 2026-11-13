@@ -8,6 +8,8 @@ export type PageTab = {
     label: string;
     icon?: LucideIcon;
     count?: number;
+    /** When set, shows a dot meaning the tab needs action; the text is read out and shown on hover. */
+    attention?: string;
     /** When set the tab navigates; otherwise `onSelect` is called. */
     href?: string;
 };
@@ -44,7 +46,9 @@ export default function PageTabs({
     const light = surface === 'light';
 
     useEffect(() => {
-        const selected = list.current?.querySelector<HTMLElement>('[aria-selected="true"]');
+        const selected = list.current?.querySelector<HTMLElement>(
+            '[aria-selected="true"]',
+        );
 
         selected?.scrollIntoView({ inline: 'center', block: 'nearest' });
     }, [active]);
@@ -55,7 +59,7 @@ export default function PageTabs({
             role="tablist"
             aria-label={label}
             className={cn(
-                'flex gap-1 overflow-x-auto rounded-xl p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
+                'flex [scrollbar-width:none] gap-1 overflow-x-auto rounded-xl p-1 [&::-webkit-scrollbar]:hidden',
                 light ? 'bg-slate-100' : 'bg-muted/70',
                 className,
             )}
@@ -70,8 +74,8 @@ export default function PageTabs({
                             ? 'bg-white text-slate-900 shadow-sm ring-1 ring-slate-200'
                             : 'bg-card text-foreground shadow-sm ring-1 ring-border'
                         : light
-                          ? 'text-slate-500 hover:bg-white/70 hover:text-slate-900'
-                          : 'text-muted-foreground hover:bg-card/60 hover:text-foreground',
+                          ? 'text-slate-500 hover:bg-slate-200/60 hover:text-slate-900'
+                          : 'text-muted-foreground hover:bg-foreground/5 hover:text-foreground',
                 );
                 const content = (
                     <>
@@ -84,6 +88,15 @@ export default function PageTabs({
                             />
                         ) : null}
                         {tab.label}
+                        {tab.attention ? (
+                            <span
+                                className="relative flex size-2"
+                                title={tab.attention}
+                            >
+                                <span className="relative inline-flex size-2 rounded-full bg-amber-500" />
+                                <span className="sr-only">{tab.attention}</span>
+                            </span>
+                        ) : null}
                         {tab.count ? (
                             <span
                                 className={cn(

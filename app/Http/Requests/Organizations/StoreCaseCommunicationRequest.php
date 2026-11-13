@@ -34,6 +34,7 @@ class StoreCaseCommunicationRequest extends FormRequest
             'draft_with_ai' => ['nullable', 'boolean'],
             'ai_brief' => ['nullable', 'string', 'max:5000'],
             'log_only' => ['nullable', 'boolean'],
+            'send_now' => ['nullable', 'boolean'],
         ];
     }
 }

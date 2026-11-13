@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Organizations;
 
+use App\Actions\Patients\NotifyPatient;
 use App\Actions\Patients\UpsertTravelArrangement;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Organizations\UpsertTravelArrangementRequest;
@@ -33,7 +34,7 @@ class TravelArrangementController extends Controller
 
         Inertia::flash('toast', [
             'type' => 'success',
-            'message' => __('Travel arrangement saved.'),
+            'message' => trim(__('Travel arrangement saved.').' '.(app(NotifyPatient::class)->staffSummary() ?? '')),
         ]);
 
         return to_route('organizations.cases.show', [

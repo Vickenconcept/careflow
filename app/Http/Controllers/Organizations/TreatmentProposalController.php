@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Organizations;
 
 use App\Actions\Patients\CreateTreatmentProposal;
 use App\Actions\Patients\DecideTreatmentProposal;
+use App\Actions\Patients\NotifyPatient;
 use App\Actions\Patients\RecordTreatmentProposalPatientResponse;
 use App\Actions\Patients\SendTreatmentProposal;
 use App\Actions\Patients\SubmitTreatmentProposalForApproval;
@@ -117,7 +118,9 @@ class TreatmentProposalController extends Controller
 
         Inertia::flash('toast', [
             'type' => 'success',
-            'message' => __('Treatment proposal updated.'),
+            'message' => $action === 'send'
+                ? trim(__('Proposal sent.').' '.(app(NotifyPatient::class)->staffSummary() ?? ''))
+                : __('Treatment proposal updated.'),
         ]);
 
         return to_route('organizations.cases.show', [

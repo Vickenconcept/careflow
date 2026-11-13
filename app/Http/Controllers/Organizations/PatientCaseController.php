@@ -12,6 +12,7 @@ use App\Enums\CaseTaskStatus;
 use App\Enums\ClinicalApprovalOutcome;
 use App\Enums\ClinicalRecommendationStatus;
 use App\Enums\CommunicationChannel;
+use App\Enums\CommunicationDirection;
 use App\Enums\DoctorReviewOutcome;
 use App\Enums\FollowUpStatus;
 use App\Enums\FollowUpType;
@@ -635,13 +636,26 @@ class PatientCaseController extends Controller
                         'created_by' => $communication->createdBy?->name,
                         'approved_by' => $communication->approvedBy?->name,
                         'created_at' => $communication->created_at?->toIso8601String(),
+                        'sent_at' => $communication->sent_at?->toIso8601String(),
+                        'approved_at' => $communication->approved_at?->toIso8601String(),
+                        'sender' => $communication->direction === CommunicationDirection::Inbound
+                            ? ($communication->sender ?: $case->patient?->fullName())
+                            : $communication->createdBy?->name,
                         'approve_url' => route('organizations.communications.approve', [
+                            'current_team' => $current_team->slug,
+                            'case' => $case->reference,
+                            'communication' => $communication->uuid,
+                        ]),
+                        'update_url' => route('organizations.communications.update', [
                             'current_team' => $current_team->slug,
                             'case' => $case->reference,
                             'communication' => $communication->uuid,
                         ]),
                     ]),
                     'channel_options' => CommunicationChannel::options(),
+                    'patient_email' => $case->patient?->email,
+                    'ai_drafting_available' => (string) config('careflow.ai.provider') === 'openai'
+                        && filled(config('ai.providers.openai.key')),
                     'urls' => [
                         'store' => route('organizations.communications.store', [
                             'current_team' => $current_team->slug,

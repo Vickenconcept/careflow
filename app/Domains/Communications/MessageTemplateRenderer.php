@@ -43,6 +43,28 @@ class MessageTemplateRenderer
     }
 
     /**
+     * Add extra lines (appointment details, what the doctor needs) to a rendered body,
+     * placed before the sign-off ("Kind regards, ...") when the template has one.
+     */
+    public function withDetails(string $body, string $details): string
+    {
+        $details = trim($details);
+        $paragraphs = preg_split('/\R{2,}/', trim($body)) ?: [trim($body)];
+
+        if ($details === '') {
+            return trim($body);
+        }
+
+        if (count($paragraphs) > 1) {
+            $signOff = array_pop($paragraphs);
+
+            return implode("\n\n", [...$paragraphs, $details, $signOff]);
+        }
+
+        return trim($body)."\n\n".$details;
+    }
+
+    /**
      * @param  array<string, scalar|null>  $variables
      */
     protected function replace(string $text, array $variables): string

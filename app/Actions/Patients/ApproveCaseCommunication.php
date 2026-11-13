@@ -27,8 +27,15 @@ class ApproveCaseCommunication
             /** @var CaseCommunication $locked */
             $locked = CaseCommunication::query()->whereKey($communication->id)->lockForUpdate()->firstOrFail();
 
-            if (! in_array($locked->status, [CommunicationStatus::Draft, CommunicationStatus::AwaitingApproval], true)) {
-                throw new InvalidArgumentException('Only draft/awaiting-approval communications can be approved.');
+            $sendable = [CommunicationStatus::Draft, CommunicationStatus::AwaitingApproval];
+
+            // Messages approved earlier without being sent can still be sent later.
+            if ($markSent) {
+                $sendable[] = CommunicationStatus::Approved;
+            }
+
+            if (! in_array($locked->status, $sendable, true)) {
+                throw new InvalidArgumentException('This message has already been handled.');
             }
 
             if ($locked->ai_metadata && ($locked->ai_metadata['contains_clinical_advice'] ?? false)) {
@@ -61,11 +68,12 @@ class ApproveCaseCommunication
                 case: $case,
                 type: CaseActivityType::CommunicationApproved,
                 summary: $markSent
-                    ? sprintf(
-                        'Communication approved and sent via %s',
-                        $providerPayload['provider'] ?? 'provider',
-                    )
-                    : 'Communication approved for send',
+                    ? match ($locked->channel) {
+                        CommunicationChannel::Email => 'Message sent to the patient by email',
+                        CommunicationChannel::PatientPortal => 'Message shared with the patient in the portal',
+                        default => 'Message approved and sent',
+                    }
+                : 'Message approved',
                 actor: $actor,
                 properties: [
                     'communication_uuid' => $locked->uuid,

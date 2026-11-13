@@ -3,6 +3,7 @@
 namespace App\Actions\Patients;
 
 use App\Enums\CaseActivityType;
+use App\Enums\MessageTemplateKey;
 use App\Enums\TravelArrangementStatus;
 use App\Enums\VisaAssistanceStatus;
 use App\Models\PatientCase;
@@ -16,6 +17,7 @@ class UpsertTravelArrangement
 {
     public function __construct(
         private RecordCaseActivity $recordActivity,
+        private NotifyPatient $notifyPatient,
     ) {}
 
     /**
@@ -38,7 +40,12 @@ class UpsertTravelArrangement
      */
     public function handle(PatientCase $case, User $actor, array $data): TravelArrangement
     {
-        return DB::transaction(function () use ($case, $actor, $data) {
+        $wasConfirmed = TravelArrangement::query()
+            ->where('patient_case_id', $case->id)
+            ->where('status', TravelArrangementStatus::Confirmed->value)
+            ->exists();
+
+        $arrangement = DB::transaction(function () use ($case, $actor, $data) {
             /** @var PatientCase $locked */
             $locked = PatientCase::query()->whereKey($case->id)->lockForUpdate()->firstOrFail();
 
@@ -105,6 +112,38 @@ class UpsertTravelArrangement
 
             return $arrangement->fresh(['assignedCoordinator:id,name,email']);
         });
+
+        // Prepare a message with the arrival details the first time travel is confirmed.
+        // It waits for a coordinator to approve it, because saving this form is not the
+        // same as deciding to message the patient.
+        if (! $wasConfirmed && $arrangement->status === TravelArrangementStatus::Confirmed) {
+            $this->notifyPatient->handle(
+                case: $case,
+                key: MessageTemplateKey::TravelInformation,
+                actor: $actor,
+                sendNow: false,
+                details: $this->travelDetails($arrangement),
+            );
+        }
+
+        return $arrangement;
+    }
+
+    /**
+     * Arrival details the patient needs, without internal notes.
+     */
+    protected function travelDetails(TravelArrangement $arrangement): string
+    {
+        return collect([
+            $arrangement->expected_arrival_date ? 'Arrival: '.$arrangement->expected_arrival_date->format('l j F Y') : null,
+            $arrangement->expected_departure_date ? 'Departure: '.$arrangement->expected_departure_date->format('l j F Y') : null,
+            $arrangement->airport_pickup_required
+                ? 'Airport pickup: arranged'.(filled($arrangement->airport_pickup_details) ? ' ('.$arrangement->airport_pickup_details.')' : '')
+                : null,
+            filled($arrangement->accommodation) ? 'Accommodation: '.$arrangement->accommodation : null,
+            filled($arrangement->hotel_details) ? 'Hotel details: '.$arrangement->hotel_details : null,
+        ])->filter()->implode('
+');
     }
 
     /**

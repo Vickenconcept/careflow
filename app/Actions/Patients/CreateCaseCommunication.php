@@ -53,7 +53,7 @@ class CreateCaseCommunication
 
             if ($draftWithAi) {
                 if ((string) config('careflow.ai.provider', 'openai') !== 'openai') {
-                    throw new InvalidArgumentException('AI drafting requires CAREFLOW_AI_PROVIDER=openai with a configured OPENAI_API_KEY.');
+                    throw new InvalidArgumentException('AI drafting is not set up yet. Please contact your CareFlow administrator.');
                 }
 
                 $brief = trim((string) ($data['ai_brief'] ?? ''));
@@ -115,7 +115,9 @@ class CreateCaseCommunication
                 'language' => $data['language'] ?? $locked->patient?->preferred_language ?? 'en',
                 'subject' => $subject,
                 'body' => $body,
-                'sender' => $actor->email,
+                'sender' => $direction === CommunicationDirection::Inbound
+                    ? ($locked->patient?->fullName() ?? 'Patient')
+                    : $actor->email,
                 'recipient' => $data['recipient'] ?? $locked->patient?->email,
                 'is_ai_draft' => $isAiDraft,
                 'requires_approval' => $requiresApproval,

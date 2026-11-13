@@ -186,7 +186,7 @@ class WorkflowRunner
             $result = match ($action) {
                 'create_task' => $this->executeCreateTask($case, $actor, $stepConfig),
                 'create_follow_up' => $this->executeCreateFollowUp($case, $actor, $stepConfig),
-                'draft_communication_from_template' => $this->executeDraftCommunication($case, $actor, $stepConfig),
+                'draft_communication_from_template' => $this->executeDraftCommunication($case, $actor, $stepConfig, (array) ($execution->context ?? [])),
                 'notify_staff' => $this->executeNotifyStaff($case, $actor, $stepConfig),
                 default => throw new InvalidArgumentException("Unsupported workflow action [{$action}]."),
             };
@@ -268,7 +268,7 @@ class WorkflowRunner
      * @param  array<string, mixed>  $config
      * @return array<string, mixed>
      */
-    protected function executeDraftCommunication(PatientCase $case, ?User $actor, array $config): array
+    protected function executeDraftCommunication(PatientCase $case, ?User $actor, array $config, array $context = []): array
     {
         if ($actor === null) {
             throw new RuntimeException('No actor available to draft workflow communication.');
@@ -293,7 +293,9 @@ class WorkflowRunner
         $communication = $this->createCaseCommunication->handle($case, $actor, [
             'channel' => $template->channel->value ?? CommunicationChannel::Email->value,
             'subject' => $rendered['subject'],
-            'body' => $rendered['body'],
+            'body' => filled($context['message_details'] ?? null)
+                ? $this->templateRenderer->withDetails($rendered['body'], (string) $context['message_details'])
+                : $rendered['body'],
             'language' => $rendered['language'],
             'recipient' => $case->patient?->email,
             'log_only' => ! $requiresApproval,

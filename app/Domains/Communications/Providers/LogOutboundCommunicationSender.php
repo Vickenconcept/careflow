@@ -47,7 +47,7 @@ class LogOutboundCommunicationSender implements OutboundCommunicationSender
             throw new InvalidArgumentException('Email communications require a recipient address.');
         }
 
-        Mail::to($recipient)->send(new CaseCommunicationMail($communication));
+        Mail::to($recipient)->send(new CaseCommunicationMail($communication, $this->portalLink($communication)));
 
         Log::info('CareFlow outbound email dispatched.', [
             'communication_uuid' => $communication->uuid,
@@ -61,6 +61,29 @@ class LogOutboundCommunicationSender implements OutboundCommunicationSender
             'reference' => $reference,
             'channel' => CommunicationChannel::Email->value,
         ];
+    }
+
+    /**
+     * A secure link to the patient's case page, where they can read the conversation and reply.
+     *
+     * Portal tokens are stored hashed, so a fresh one is issued for each email. The newest
+     * email always carries a working link; older links stop working once it is replaced.
+     */
+    protected function portalLink(CaseCommunication $communication): ?string
+    {
+        $case = $communication->case;
+
+        if ($case === null || $case->status->patientJourneyStage() === null) {
+            return null;
+        }
+
+        $case->loadMissing('team');
+
+        return route('portal.cases.show', [
+            'organization' => $case->team->slug,
+            'reference' => $case->reference,
+            'token' => $case->issuePortalAccessToken(),
+        ]);
     }
 
     /**
