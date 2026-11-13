@@ -20,12 +20,19 @@ use App\Models\DocumentSummary;
 use App\Models\DocumentTranslation;
 use App\Models\PatientDocument;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use RuntimeException;
 use Throwable;
 
 class DocumentProcessingPipeline
 {
+    public const MISSING_FILE_MESSAGE = 'The uploaded file could not be found. Please upload it again.';
+
+    public const UNSUPPORTED_TYPE_MESSAGE = 'AI assist cannot read this type of file. You can still open the original and continue the case.';
+
+    public const GENERIC_FAILURE_MESSAGE = 'AI assist could not read this document. You can still open the original file and continue the case.';
+
     public function __construct(
         private DocumentTextExtractor $textExtractor,
         private DocumentLanguageDetector $languageDetector,
@@ -36,79 +43,82 @@ class DocumentProcessingPipeline
         private RecordCaseActivity $recordActivity,
     ) {}
 
+    /**
+     * Run the AI pipeline for a document.
+     *
+     * Each step is saved straight away so staff see live progress, and the slow
+     * AI calls run outside any database transaction. Holding one transaction
+     * across them locks SQLite and stalls every other request, including the
+     * document page's status polling, until the run finishes. Only the final
+     * write of the outputs is wrapped in a transaction.
+     */
     public function process(PatientDocument $document): DocumentProcessingRun
     {
+        $run = null;
+
         try {
-            return DB::transaction(function () use ($document) {
-                /** @var PatientDocument $locked */
-                $locked = PatientDocument::query()
-                    ->whereKey($document->id)
-                    ->lockForUpdate()
-                    ->firstOrFail();
+            /** @var PatientDocument $locked */
+            $locked = PatientDocument::query()->whereKey($document->id)->firstOrFail();
 
-                if (in_array($locked->processing_status, [
-                    DocumentProcessingStatus::Completed,
-                    DocumentProcessingStatus::Cancelled,
-                ], true)) {
-                    return $locked->processingRuns()->latest('id')->firstOrFail();
-                }
+            if (in_array($locked->processing_status, [
+                DocumentProcessingStatus::Completed,
+                DocumentProcessingStatus::Cancelled,
+            ], true)) {
+                return $locked->processingRuns()->latest('id')->firstOrFail();
+            }
 
-                $attempt = ((int) $locked->processingRuns()->max('attempt')) + 1;
+            $attempt = ((int) $locked->processingRuns()->max('attempt')) + 1;
 
-                $run = DocumentProcessingRun::query()->create([
-                    'team_id' => $locked->team_id,
-                    'patient_document_id' => $locked->id,
-                    'uuid' => (string) Str::uuid(),
-                    'provider' => (string) config('careflow.ai.provider', 'openai'),
-                    'status' => DocumentProcessingStatus::Validating,
-                    'attempt' => max(1, $attempt),
-                    'started_at' => now(),
-                ]);
+            $run = DocumentProcessingRun::query()->create([
+                'team_id' => $locked->team_id,
+                'patient_document_id' => $locked->id,
+                'uuid' => (string) Str::uuid(),
+                'provider' => (string) config('careflow.ai.provider', 'openai'),
+                'status' => DocumentProcessingStatus::Validating,
+                'attempt' => max(1, $attempt),
+                'started_at' => now(),
+            ]);
 
-                $locked->loadMissing(['team.organizationSetting', 'patient', 'case']);
+            $locked->update(['processing_status' => DocumentProcessingStatus::Validating]);
+            $locked->loadMissing(['team.organizationSetting', 'patient', 'case']);
 
-                $this->assertFileIsValid($locked);
+            $this->assertFileIsValid($locked);
 
-                $locked->update(['processing_status' => DocumentProcessingStatus::Extracting]);
-                $run->update(['status' => DocumentProcessingStatus::Extracting]);
+            $this->advance($locked, $run, DocumentProcessingStatus::Extracting);
+            $textResult = $this->textExtractor->extract($locked);
 
-                $textResult = $this->textExtractor->extract($locked);
+            $this->advance($locked, $run, DocumentProcessingStatus::DetectingLanguage);
+            $language = $this->languageDetector->detect($textResult->text);
 
-                $locked->update(['processing_status' => DocumentProcessingStatus::DetectingLanguage]);
-                $run->update(['status' => DocumentProcessingStatus::DetectingLanguage]);
-                $language = $this->languageDetector->detect($textResult->text);
+            $classification = $this->classifier->classify($locked, $textResult->text);
 
-                $classification = $this->classifier->classify($locked, $textResult->text);
+            $locked->update([
+                'category' => $classification->category,
+                'original_language' => $language->language,
+            ]);
+            $this->advance($locked, $run, DocumentProcessingStatus::Structuring);
 
-                $locked->update([
-                    'category' => $classification->category,
-                    'original_language' => $language->language,
-                    'processing_status' => DocumentProcessingStatus::Structuring,
-                ]);
-                $run->update(['status' => DocumentProcessingStatus::Structuring]);
+            $structured = $this->informationExtractor->extract(
+                $locked,
+                $textResult->text,
+                $language->language,
+            );
 
-                $structured = $this->informationExtractor->extract(
-                    $locked,
-                    $textResult->text,
-                    $language->language,
-                );
+            $targetLanguage = $locked->team->organizationSetting?->default_language
+                ?: $locked->patient?->preferred_language
+                ?: 'en';
 
-                $targetLanguage = $locked->team->organizationSetting?->default_language
-                    ?: $locked->patient?->preferred_language
-                    ?: 'en';
+            $this->advance($locked, $run, DocumentProcessingStatus::Translating);
+            $translation = $this->translator->translate(
+                $textResult->text,
+                $language->language,
+                $targetLanguage,
+            );
 
-                $locked->update(['processing_status' => DocumentProcessingStatus::Translating]);
-                $run->update(['status' => DocumentProcessingStatus::Translating]);
-                $translation = $this->translator->translate(
-                    $textResult->text,
-                    $language->language,
-                    $targetLanguage,
-                );
+            $this->advance($locked, $run, DocumentProcessingStatus::Summarizing);
+            $summary = $this->summarizer->summarize($locked, $textResult->text, $structured);
 
-                $locked->update(['processing_status' => DocumentProcessingStatus::Summarizing]);
-                $run->update(['status' => DocumentProcessingStatus::Summarizing]);
-                $summary = $this->summarizer->summarize($locked, $textResult->text, $structured);
-
+            return DB::transaction(function () use ($locked, $run, $textResult, $structured, $translation, $summary) {
                 $this->persistVersionedOutputs(
                     $locked,
                     $run,
@@ -173,7 +183,6 @@ class DocumentProcessingPipeline
                 return $run->fresh();
             });
         } catch (Throwable $exception) {
-            // Persist failure outside the rolled-back transaction so staff see the real error.
             $message = $this->staffFacingProcessingError($exception);
             $fresh = PatientDocument::query()->find($document->id);
 
@@ -183,33 +192,50 @@ class DocumentProcessingPipeline
                     'processing_error' => $message,
                 ]);
 
-                DocumentProcessingRun::query()->create([
-                    'team_id' => $fresh->team_id,
-                    'patient_document_id' => $fresh->id,
-                    'uuid' => (string) Str::uuid(),
-                    'provider' => (string) config('careflow.ai.provider', 'openai'),
+                $failure = [
                     'status' => DocumentProcessingStatus::Failed,
-                    'attempt' => max(1, ((int) $fresh->processingRuns()->max('attempt')) + 1),
-                    'started_at' => now(),
                     'finished_at' => now(),
                     'error_message' => $message,
-                ]);
+                ];
+
+                if ($run !== null) {
+                    $run->update($failure);
+                } else {
+                    DocumentProcessingRun::query()->create([
+                        ...$failure,
+                        'team_id' => $fresh->team_id,
+                        'patient_document_id' => $fresh->id,
+                        'uuid' => (string) Str::uuid(),
+                        'provider' => (string) config('careflow.ai.provider', 'openai'),
+                        'attempt' => max(1, ((int) $fresh->processingRuns()->max('attempt')) + 1),
+                        'started_at' => now(),
+                    ]);
+                }
             }
 
             throw $exception;
         }
     }
 
+    /**
+     * Save the next pipeline step so the document page can show it straight away.
+     */
+    protected function advance(PatientDocument $document, DocumentProcessingRun $run, DocumentProcessingStatus $status): void
+    {
+        $document->update(['processing_status' => $status]);
+        $run->update(['status' => $status]);
+    }
+
     protected function assertFileIsValid(PatientDocument $document): void
     {
         if (! $document->filesystem()->exists($document->path)) {
-            throw new RuntimeException('Stored file is missing from private storage.');
+            throw new RuntimeException(self::MISSING_FILE_MESSAGE);
         }
 
         $allowed = config('careflow.documents.allowed_mimes', []);
 
         if (! in_array(strtolower($document->extension), $allowed, true)) {
-            throw new RuntimeException('Unsupported document type.');
+            throw new RuntimeException(self::UNSUPPORTED_TYPE_MESSAGE);
         }
     }
 
@@ -351,18 +377,22 @@ class DocumentProcessingPipeline
         );
     }
 
+    /**
+     * Plain message for hospital staff. Technical details go to the log, never the page.
+     */
     protected function staffFacingProcessingError(Throwable $exception): string
     {
         $message = trim($exception->getMessage());
 
-        if ($message === '') {
-            return 'Document processing failed.';
+        if (in_array($message, [self::MISSING_FILE_MESSAGE, self::UNSUPPORTED_TYPE_MESSAGE], true)) {
+            return $message;
         }
 
-        if (preg_match('/"message"\s*:\s*"([^"]+)"/', $message, $matches) === 1) {
-            return Str::limit($matches[1], 240);
-        }
+        Log::warning('Document AI pipeline failed', [
+            'exception' => $exception::class,
+            'message' => Str::limit($message, 1000),
+        ]);
 
-        return Str::limit(preg_replace('/\s+/', ' ', $message) ?? $message, 240);
+        return self::GENERIC_FAILURE_MESSAGE;
     }
 }

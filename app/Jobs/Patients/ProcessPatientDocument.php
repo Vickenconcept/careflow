@@ -9,7 +9,6 @@ use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Str;
 use Throwable;
 
 class ProcessPatientDocument implements ShouldBeUnique, ShouldQueue
@@ -62,7 +61,7 @@ class ProcessPatientDocument implements ShouldBeUnique, ShouldQueue
         ) {
             $document->update([
                 'processing_status' => DocumentProcessingStatus::Failed,
-                'processing_error' => 'OPENAI_API_KEY is missing. Add it to .env, restart the queue worker, then run AI again.',
+                'processing_error' => 'AI assist is not set up yet. Please contact your CareFlow administrator. You can still open the original file and continue the case.',
             ]);
 
             return;
@@ -81,17 +80,9 @@ class ProcessPatientDocument implements ShouldBeUnique, ShouldQueue
             return;
         }
 
-        $message = trim((string) $exception?->getMessage());
-
-        if ($message !== '' && preg_match('/"message"\s*:\s*"([^"]+)"/', $message, $matches) === 1) {
-            $message = $matches[1];
-        }
-
         $document->update([
             'processing_status' => DocumentProcessingStatus::Failed,
-            'processing_error' => $message !== ''
-                ? Str::limit(preg_replace('/\s+/', ' ', $message) ?? $message, 240)
-                : 'Document processing failed after retries.',
+            'processing_error' => DocumentProcessingPipeline::GENERIC_FAILURE_MESSAGE,
         ]);
 
         Log::warning('Patient document processing failed', [

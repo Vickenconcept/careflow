@@ -260,6 +260,37 @@ export default function DocumentComparison({
         stop();
     }, [isProcessing, start, stop]);
 
+    // Coming back to the tab (for example from the "ready for review" email)
+    // fetches the latest AI results so nobody has to refresh the page.
+    useEffect(() => {
+        const refresh = () => {
+            if (window.document.visibilityState === 'visible') {
+                router.reload({ only: ['document', 'ai', 'permissions', 'navigation'] });
+            }
+        };
+
+        window.document.addEventListener('visibilitychange', refresh);
+
+        return () => window.document.removeEventListener('visibilitychange', refresh);
+    }, []);
+
+    // When a new AI version arrives, start the correction editors from it.
+    const extractionVersion = ai.extraction?.version ?? null;
+    const summaryVersion = ai.summary?.version ?? null;
+
+    useEffect(() => {
+        form.setData({
+            corrected_payload: ai.extraction?.payload ?? {},
+            corrected_sections: ai.summary?.sections ?? {},
+            reason: '',
+        });
+        setPayloadJson(JSON.stringify(ai.extraction?.payload ?? {}, null, 2));
+        setSectionsJson(JSON.stringify(ai.summary?.sections ?? {}, null, 2));
+        setJsonError(null);
+        // Only reset when the AI output version changes, not on every edit.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [extractionVersion, summaryVersion]);
+
     useEffect(() => {
         statusForm.setData(
             'status',
@@ -332,10 +363,6 @@ export default function DocumentComparison({
                         <Badge className="rounded-full border border-slate-200 bg-white text-slate-600">
                             <FileText className="size-3.5" />
                             <span className="ms-1">{document.category}</span>
-                        </Badge>
-                        <Badge className="rounded-full border border-slate-200 bg-white text-slate-600">
-                            <Bot className="size-3.5" />
-                            <span className="ms-1">{ai.provider}</span>
                         </Badge>
                         {permissions.canReprocess ? (
                             <Tooltip>
@@ -507,13 +534,10 @@ export default function DocumentComparison({
                                         AI assist is running in the background
                                     </p>
                                     <p className="mt-1 text-sky-800/90">
-                                        Status updates automatically. Keep{' '}
-                                        <code className="rounded bg-sky-100 px-1 py-0.5 text-xs">
-                                            php artisan queue:work
-                                        </code>{' '}
-                                        running so extract → language →
-                                        structure → translate → summary can
-                                        finish.
+                                        This usually takes a minute or two.
+                                        The page updates on its own as each
+                                        step finishes, and you can keep
+                                        working in the meantime.
                                     </p>
                                 </div>
                                 <ProcessingSteps
@@ -946,8 +970,7 @@ export default function DocumentComparison({
                                     <>
                                         <p className="mb-2 text-xs text-slate-500">
                                             {ai.translation.source_language} →{' '}
-                                            {ai.translation.target_language} ·{' '}
-                                            {ai.translation.provider}
+                                            {ai.translation.target_language}
                                         </p>
                                         <pre className="max-h-72 overflow-y-auto whitespace-pre-wrap text-sm leading-6 text-slate-700">
                                             {ai.translation.translated_text}
