@@ -2,6 +2,7 @@ import { Head, useForm } from '@inertiajs/react';
 import { useMemo, useState } from 'react';
 import Heading from '@/components/heading';
 import InputError from '@/components/input-error';
+import { AppSelect } from '@/components/app-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -200,25 +201,14 @@ export default function MessageTemplatesIndex({
                                 </div>
                                 <div className="grid gap-2">
                                     <Label>Channel</Label>
-                                    <select
-                                        className="h-9 rounded-md border border-input bg-transparent px-3 text-sm"
+                                    <AppSelect
+                                        aria-label="Channel"
                                         value={form.data.channel}
-                                        onChange={(event) =>
-                                            form.setData(
-                                                'channel',
-                                                event.target.value,
-                                            )
+                                        options={channel_options}
+                                        onChange={(value) =>
+                                            form.setData('channel', value)
                                         }
-                                    >
-                                        {channel_options.map((option) => (
-                                            <option
-                                                key={option.value}
-                                                value={option.value}
-                                            >
-                                                {option.label}
-                                            </option>
-                                        ))}
-                                    </select>
+                                    />
                                 </div>
                                 <ToggleField
                                     id="is_active"
@@ -339,22 +329,16 @@ export default function MessageTemplatesIndex({
                                 <h3 className="text-sm font-semibold">
                                     Preview
                                 </h3>
-                                <select
-                                    className="h-8 rounded-md border border-input bg-transparent px-2 text-xs"
+                                <AppSelect
+                                    aria-label="Preview language"
+                                    className="h-8 w-24 text-xs"
                                     value={previewLanguage}
-                                    onChange={(event) =>
-                                        setPreviewLanguage(event.target.value)
-                                    }
-                                >
-                                    {languages.map((language) => (
-                                        <option
-                                            key={language}
-                                            value={language}
-                                        >
-                                            {language.toUpperCase()}
-                                        </option>
-                                    ))}
-                                </select>
+                                    options={languages.map((language) => ({
+                                        value: language,
+                                        label: language.toUpperCase(),
+                                    }))}
+                                    onChange={setPreviewLanguage}
+                                />
                             </div>
                             <p className="text-sm font-medium">
                                 {previewSubject || 'No subject'}

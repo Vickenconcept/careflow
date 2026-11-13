@@ -2,6 +2,7 @@ import { Head, Link, router } from '@inertiajs/react';
 import { CalendarCheck, ClipboardList, Eye, Plane, ScrollText } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { EmptyState } from '@/components/empty-state';
+import { AppSelect } from '@/components/app-select';
 import {
     PaginationLinks,
     type PaginationLink,
@@ -67,30 +68,23 @@ export default function Coordination({
                             href: `${base}?tab=${tab.id}`,
                         }))}
                     />
-                    <label className="flex items-center gap-2 text-sm">
+                    <div className="flex items-center gap-2 text-sm">
                         <span className="text-muted-foreground">Status</span>
-                        <select
+                        <AppSelect
+                            aria-label="Filter by status"
+                            className="w-52"
                             value={status}
-                            onChange={(event) =>
+                            emptyLabel="All statuses"
+                            options={statusOptions}
+                            onChange={(value) =>
                                 router.get(
                                     base,
-                                    {
-                                        tab: active,
-                                        status: event.target.value || undefined,
-                                    },
+                                    { tab: active, status: value || undefined },
                                     { preserveState: true, replace: true },
                                 )
                             }
-                            className="h-9 rounded-lg border border-border bg-card px-2 text-sm"
-                        >
-                            <option value="">All</option>
-                            {statusOptions.map((option) => (
-                                <option key={option.value} value={option.value}>
-                                    {option.label}
-                                </option>
-                            ))}
-                        </select>
-                    </label>
+                        />
+                    </div>
                 </div>
 
                 {rows.data.length === 0 ? (

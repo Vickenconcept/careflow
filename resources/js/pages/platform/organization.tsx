@@ -1,6 +1,7 @@
 import { Head, Link, useForm } from '@inertiajs/react';
 import { ArrowLeft } from 'lucide-react';
 import InputError from '@/components/input-error';
+import { AppSelect } from '@/components/app-select';
 import { ToggleField } from '@/components/toggle-field';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -110,36 +111,22 @@ export default function PlatformOrganization({
                     <div className="grid gap-4 sm:grid-cols-3">
                         <div className="grid gap-1.5">
                             <Label htmlFor="plan">Plan</Label>
-                            <select
+                            <AppSelect
                                 id="plan"
                                 value={form.data.plan}
-                                onChange={(event) => form.setData('plan', event.target.value)}
-                                className="h-9 rounded-md border border-input bg-background px-3 text-sm"
-                            >
-                                {planOptions.map((option) => (
-                                    <option key={option.value} value={option.value}>
-                                        {option.label}
-                                    </option>
-                                ))}
-                            </select>
+                                options={planOptions}
+                                onChange={(value) => form.setData('plan', value)}
+                            />
                             <InputError message={form.errors.plan} />
                         </div>
                         <div className="grid gap-1.5">
                             <Label htmlFor="subscription_status">Status</Label>
-                            <select
+                            <AppSelect
                                 id="subscription_status"
                                 value={form.data.subscription_status}
-                                onChange={(event) =>
-                                    form.setData('subscription_status', event.target.value)
-                                }
-                                className="h-9 rounded-md border border-input bg-background px-3 text-sm"
-                            >
-                                {statusOptions.map((option) => (
-                                    <option key={option.value} value={option.value}>
-                                        {option.label}
-                                    </option>
-                                ))}
-                            </select>
+                                options={statusOptions}
+                                onChange={(value) => form.setData('subscription_status', value)}
+                            />
                             <InputError message={form.errors.subscription_status} />
                         </div>
                         <div className="grid gap-1.5">

@@ -22,6 +22,17 @@ export default defineConfig({
             formVariants: true,
         }),
     ]),
+    build: {
+        // Keep the production build light enough for small deploy servers:
+        // skip compiling the thousands of unused icon files in lucide-react,
+        // and skip the gzip size report at the end.
+        reportCompressedSize: false,
+        rolldownOptions: {
+            experimental: {
+                lazyBarrel: true,
+            },
+        },
+    },
     server: {
         watch: {
             ignored: [
