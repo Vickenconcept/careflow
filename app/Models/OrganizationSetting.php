@@ -120,6 +120,9 @@ class OrganizationSetting extends Model
             'staff_patient_update' => 'Staff: a patient uploads documents or replies',
             'staff_case_assigned' => 'Staff: a case is assigned to them',
             'patient_confirmation' => 'Patient: enquiry received confirmation email',
+            'staff_daily_reminders' => 'Staff: morning email about follow-ups due today and overdue tasks',
+            'patient_follow_up_reminders' => 'Patient: prepare a follow-up reminder message for staff to approve',
+            'staff_proposal_expired' => 'Staff: a treatment proposal passes its valid-until date',
         ];
     }
 

@@ -27,11 +27,17 @@ export function AppSidebarHeader({
     const { state, isMobile } = useSidebar();
     const getInitials = useInitials();
     const canOpenCases =
-        currentTeam && currentTeam.role !== 'management_viewer' && currentTeam.role !== 'member';
+        currentTeam &&
+        currentTeam.role !== 'management_viewer' &&
+        currentTeam.role !== 'member';
     const casesHref = canOpenCases ? `/${currentTeam.slug}/cases` : null;
     const user = auth.user;
     const roleLabel = currentTeam?.roleLabel;
     const showNavbarExpand = isMobile || state === 'collapsed';
+    const attentionLabel =
+        pendingWorkCount === 0
+            ? 'Nothing needs your attention. Open My work'
+            : `${pendingWorkCount} ${pendingWorkCount === 1 ? 'thing needs' : 'things need'} your attention. Open My work`;
 
     return (
         <header className="z-20 flex shrink-0 items-center gap-3 bg-background px-4 py-3 md:px-6">
@@ -82,20 +88,19 @@ export function AppSidebarHeader({
                     >
                         <Link
                             href={`/${currentTeam?.slug}/work`}
-                            aria-label={
-                                pendingWorkCount > 0
-                                    ? `${pendingWorkCount} open tasks assigned to you. Open my work`
-                                    : 'My work. No open tasks'
-                            }
-                            title={
-                                pendingWorkCount > 0
-                                    ? `${pendingWorkCount} open tasks assigned to you`
-                                    : 'No open tasks assigned to you'
-                            }
+                            aria-label={attentionLabel}
+                            title={attentionLabel}
                         >
                             <IconBell className={thinIcon} />
                             {pendingWorkCount > 0 ? (
-                                <span className="absolute top-1.5 right-1.5 size-1.5 rounded-full bg-destructive" />
+                                <span
+                                    aria-hidden="true"
+                                    className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] leading-none font-semibold text-white tabular-nums ring-2 ring-background"
+                                >
+                                    {pendingWorkCount > 99
+                                        ? '99+'
+                                        : pendingWorkCount}
+                                </span>
                             ) : null}
                         </Link>
                     </Button>
@@ -154,6 +159,7 @@ const PAGE_TITLES: Record<string, string> = {
     dashboard: 'Dashboard',
     'organizations/work': 'My work',
     'organizations/patients': 'Patients',
+    'organizations/patients/show': 'Patient',
     'organizations/coordination': 'Coordination',
     'organizations/audit': 'Audit log',
     'organizations/roles': 'Roles and permissions',

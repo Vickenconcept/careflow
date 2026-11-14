@@ -24,6 +24,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
     'title',
     'description',
     'due_at',
+    'reminded_at',
     'completed_at',
     'outcome_notes',
     'is_demo',
@@ -90,6 +91,7 @@ class PatientFollowUp extends Model
             'follow_up_type' => FollowUpType::class,
             'status' => FollowUpStatus::class,
             'due_at' => 'datetime',
+            'reminded_at' => 'datetime',
             'completed_at' => 'datetime',
             'is_demo' => 'boolean',
         ];

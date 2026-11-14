@@ -69,6 +69,17 @@ class CreateTreatmentProposal
                 }
             }
 
+            // A new proposal replaces the current one, so a case only ever has one live proposal.
+            $previous = TreatmentProposal::query()
+                ->where('patient_case_id', $locked->id)
+                ->where('is_current', true)
+                ->lockForUpdate()
+                ->get();
+
+            if ($previous->contains(fn (TreatmentProposal $proposal) => $proposal->status === TreatmentProposalStatus::PatientAccepted)) {
+                throw new InvalidArgumentException('The patient has already accepted the current proposal, so a new one cannot replace it.');
+            }
+
             $nextVersion = ((int) TreatmentProposal::query()
                 ->where('patient_case_id', $locked->id)
                 ->max('version')) + 1;
@@ -83,6 +94,7 @@ class CreateTreatmentProposal
                 'uuid' => (string) Str::uuid(),
                 'reference' => $this->references->next($locked->team),
                 'version' => max(1, $nextVersion),
+                'parent_proposal_id' => $previous->first()?->id,
                 'status' => TreatmentProposalStatus::Draft,
                 'proposed_procedure' => $data['proposed_procedure'],
                 'estimated_cost' => $data['estimated_cost'] ?? null,
@@ -96,6 +108,19 @@ class CreateTreatmentProposal
             ]);
 
             $this->syncItems($proposal, $data['items'] ?? []);
+
+            foreach ($previous as $replaced) {
+                // Final outcomes (declined, expired, cancelled) are kept for reporting;
+                // anything still in progress is marked as revised.
+                $replaced->update([
+                    'is_current' => false,
+                    'status' => in_array($replaced->status, [
+                        TreatmentProposalStatus::PatientDeclined,
+                        TreatmentProposalStatus::Expired,
+                        TreatmentProposalStatus::Cancelled,
+                    ], true) ? $replaced->status : TreatmentProposalStatus::Revised,
+                ]);
+            }
 
             $locked->forceFill(['last_activity_at' => now()])->save();
 

@@ -21,6 +21,7 @@ enum CaseActivityType: string
     case TreatmentProposalDecided = 'treatment_proposal_decided';
     case TreatmentProposalSent = 'treatment_proposal_sent';
     case TreatmentProposalPatientResponded = 'treatment_proposal_patient_responded';
+    case TreatmentProposalExpired = 'treatment_proposal_expired';
     case AppointmentProposed = 'appointment_proposed';
     case AppointmentUpdated = 'appointment_updated';
     case AppointmentStatusChanged = 'appointment_status_changed';
@@ -55,6 +56,7 @@ enum CaseActivityType: string
             self::TreatmentProposalDecided => 'Treatment proposal decided',
             self::TreatmentProposalSent => 'Treatment proposal sent',
             self::TreatmentProposalPatientResponded => 'Patient proposal response',
+            self::TreatmentProposalExpired => 'Treatment proposal expired',
             self::AppointmentProposed => 'Appointment proposed',
             self::AppointmentUpdated => 'Appointment updated',
             self::AppointmentStatusChanged => 'Appointment status changed',

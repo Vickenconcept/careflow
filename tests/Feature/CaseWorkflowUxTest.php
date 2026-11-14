@@ -761,7 +761,7 @@ test('administrators can save module and notification preferences', function () 
     [$team, $admin] = adminWithTeam();
 
     $modules = ['proposals' => true, 'appointments' => false, 'travel' => true, 'communications' => true];
-    $notifications = ['staff_new_enquiry' => true, 'staff_patient_update' => false, 'staff_case_assigned' => true, 'patient_confirmation' => false];
+    $notifications = ['staff_new_enquiry' => true, 'staff_patient_update' => false, 'staff_case_assigned' => true, 'patient_confirmation' => false, 'staff_daily_reminders' => true, 'patient_follow_up_reminders' => true, 'staff_proposal_expired' => true];
 
     $this->actingAs($admin)
         ->patch(route('organizations.preferences.update', ['current_team' => $team]), compact('modules', 'notifications'))

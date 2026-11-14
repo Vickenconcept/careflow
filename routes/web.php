@@ -6,6 +6,7 @@ use App\Http\Controllers\Organizations\AuditLogController;
 use App\Http\Controllers\Organizations\BulkCaseAssignmentController;
 use App\Http\Controllers\Organizations\CaseAppointmentController;
 use App\Http\Controllers\Organizations\CaseCommunicationController;
+use App\Http\Controllers\Organizations\CaseDocumentUploadController;
 use App\Http\Controllers\Organizations\CaseTaskController;
 use App\Http\Controllers\Organizations\ClinicalApprovalController;
 use App\Http\Controllers\Organizations\ClinicalObservationController;
@@ -29,12 +30,15 @@ use App\Http\Controllers\Organizations\PatientDirectoryController;
 use App\Http\Controllers\Organizations\PatientDocumentController;
 use App\Http\Controllers\Organizations\PatientDocumentReviewController;
 use App\Http\Controllers\Organizations\PatientFollowUpController;
+use App\Http\Controllers\Organizations\PatientProfileController;
 use App\Http\Controllers\Organizations\SavedCaseViewController;
+use App\Http\Controllers\Organizations\StaffCaseIntakeController;
 use App\Http\Controllers\Organizations\StorageSettingsController;
 use App\Http\Controllers\Organizations\TravelArrangementController;
 use App\Http\Controllers\Organizations\TreatmentProposalController;
 use App\Http\Controllers\Organizations\WorkflowExecutionController;
 use App\Http\Controllers\Organizations\WorkQueueController;
+use App\Http\Controllers\Organizations\WorkQueueItemController;
 use App\Http\Controllers\Platform\ImpersonationController;
 use App\Http\Controllers\Platform\PlatformDashboardController;
 use App\Http\Controllers\Platform\PlatformOrganizationController;
@@ -91,6 +95,8 @@ Route::prefix('{current_team}')
         Route::delete('assistant/conversation', [AssistantController::class, 'clear'])->name('organizations.assistant.clear');
         Route::patch('assistant/settings', [AssistantController::class, 'updateSettings'])->name('organizations.assistant.settings');
         Route::get('patients', PatientDirectoryController::class)->name('organizations.patients.index');
+        Route::get('patients/{patient:uuid}', [PatientProfileController::class, 'show'])->name('organizations.patients.show');
+        Route::patch('patients/{patient:uuid}', [PatientProfileController::class, 'update'])->name('organizations.patients.update');
         Route::get('coordination', CoordinationController::class)->name('organizations.coordination');
         Route::get('organization/audit', AuditLogController::class)->name('organizations.audit');
         Route::get('organization/roles', OrganizationRolesController::class)->name('organizations.roles');
@@ -146,6 +152,9 @@ Route::prefix('{current_team}')
         Route::delete('case-views/{view}', [SavedCaseViewController::class, 'destroy'])->name('organizations.case-views.destroy');
         Route::get('cases', [PatientCaseController::class, 'index'])
             ->name('organizations.cases.index');
+        Route::post('cases', StaffCaseIntakeController::class)
+            ->middleware('throttle:30,1')
+            ->name('organizations.cases.store');
         Route::get('cases/{case}', [PatientCaseController::class, 'show'])
             ->name('organizations.cases.show');
         Route::patch('cases/{case}/status', [PatientCaseStatusController::class, 'update'])
@@ -159,6 +168,9 @@ Route::prefix('{current_team}')
             ->name('organizations.documents.preview');
         Route::get('cases/{case}/documents/{document}/download', [PatientDocumentController::class, 'download'])
             ->name('organizations.documents.download');
+        Route::post('cases/{case}/documents', CaseDocumentUploadController::class)
+            ->middleware('throttle:30,1')
+            ->name('organizations.documents.store');
         Route::post('cases/{case}/documents/{document}/reprocess', [PatientDocumentController::class, 'reprocess'])
             ->name('organizations.documents.reprocess');
         Route::post('cases/{case}/documents/{document}/review/confirm', [PatientDocumentReviewController::class, 'confirm'])
@@ -226,6 +238,11 @@ Route::prefix('{current_team}')
             ->name('organizations.follow-ups.update');
         Route::post('cases/{case}/follow-ups/{followUp}/complete', [PatientFollowUpController::class, 'complete'])
             ->name('organizations.follow-ups.complete');
+
+        Route::post('work/cases/{case}/tasks/{task}/complete', [WorkQueueItemController::class, 'completeTask'])
+            ->name('organizations.work.tasks.complete');
+        Route::post('work/cases/{case}/follow-ups/{followUp}/complete', [WorkQueueItemController::class, 'completeFollowUp'])
+            ->name('organizations.work.follow-ups.complete');
     });
 
 Route::middleware(['auth'])->group(function () {

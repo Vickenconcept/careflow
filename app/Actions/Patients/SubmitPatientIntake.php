@@ -96,7 +96,10 @@ class SubmitPatientIntake
             $this->recordActivity->handle(
                 case: $case,
                 type: CaseActivityType::CaseCreated,
-                summary: 'Patient enquiry submitted through the public intake portal',
+                summary: $data->recordedBy === null
+                    ? 'Patient enquiry submitted through the public intake portal'
+                    : sprintf('Enquiry entered by %s', $data->recordedBy->name),
+                actor: $data->recordedBy,
                 properties: [
                     'submission_uuid' => $submissionUuid,
                     'preferred_language' => $data->preferredLanguage,
@@ -142,8 +145,8 @@ class SubmitPatientIntake
 
             $portalToken = $case->issuePortalAccessToken();
 
-            DB::afterCommit(function () use ($enquiry, $case, $portalToken): void {
-                event(new PatientEnquirySubmitted($enquiry->id, $case->id, $portalToken));
+            DB::afterCommit(function () use ($enquiry, $case, $portalToken, $data): void {
+                event(new PatientEnquirySubmitted($enquiry->id, $case->id, $data->emailPatient ? $portalToken : ''));
             });
 
             return [

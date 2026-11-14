@@ -4,12 +4,10 @@ namespace App\Actions\Patients;
 
 use App\Domains\Cases\CaseStatusTransitionMap;
 use App\Enums\CaseActivityType;
-use App\Enums\CaseStatus;
 use App\Enums\CommunicationChannel;
 use App\Enums\CommunicationDirection;
 use App\Enums\CommunicationStatus;
 use App\Enums\DocumentCategory;
-use App\Enums\DocumentProcessingStatus;
 use App\Enums\TreatmentProposalPatientResponse;
 use App\Models\CaseCommunication;
 use App\Models\PatientCase;
@@ -36,6 +34,7 @@ class RecordPatientPortalSubmission
         private CreateCaseTask $createTask,
         private CaseStatusTransitionMap $transitions,
         private RecordTreatmentProposalPatientResponse $recordProposalResponse,
+        private AddCaseDocuments $addDocuments,
     ) {}
 
     /**
@@ -44,62 +43,7 @@ class RecordPatientPortalSubmission
      */
     public function uploadDocuments(PatientCase $case, array $files): array
     {
-        $documents = DB::transaction(function () use ($case, $files) {
-            /** @var PatientCase $locked */
-            $locked = PatientCase::query()->whereKey($case->id)->lockForUpdate()->firstOrFail();
-            $stored = [];
-
-            foreach ($files as $item) {
-                $meta = $this->documentStorage->store($locked->team, $locked, $item['file']);
-
-                $stored[] = PatientDocument::query()->create([
-                    'team_id' => $locked->team_id,
-                    'patient_id' => $locked->patient_id,
-                    'patient_case_id' => $locked->id,
-                    'uuid' => $meta['uuid'],
-                    'original_filename' => $meta['original_filename'],
-                    'disk' => $meta['disk'],
-                    'path' => $meta['path'],
-                    'mime_type' => $meta['mime_type'],
-                    'extension' => $meta['extension'],
-                    'size_bytes' => $meta['size_bytes'],
-                    'checksum_sha256' => $meta['checksum_sha256'],
-                    'category' => $item['category'],
-                    'processing_status' => DocumentProcessingStatus::Uploaded,
-                    'uploaded_at' => now(),
-                ]);
-            }
-
-            $this->recordActivity->handle(
-                case: $locked,
-                type: CaseActivityType::DocumentUploaded,
-                summary: sprintf('Patient uploaded %d additional document(s) through the portal', count($stored)),
-                properties: ['document_uuids' => array_map(fn (PatientDocument $document) => $document->uuid, $stored)],
-                patientVisible: true,
-            );
-
-            $from = $locked->status;
-            $awaiting = in_array($from, [CaseStatus::AwaitingDocuments, CaseStatus::AdditionalInformationRequired], true);
-
-            if ($awaiting && $this->transitions->canTransition($from, CaseStatus::DocumentsReceived)) {
-                $locked->forceFill(['status' => CaseStatus::DocumentsReceived]);
-                $this->recordActivity->handle(
-                    case: $locked,
-                    type: CaseActivityType::StatusChanged,
-                    summary: sprintf('Status changed from %s to %s', $from->label(), CaseStatus::DocumentsReceived->label()),
-                    properties: ['from' => $from->value, 'to' => CaseStatus::DocumentsReceived->value, 'note' => 'Patient uploaded documents'],
-                    patientVisible: false,
-                );
-            }
-
-            $locked->forceFill(['last_activity_at' => now()])->save();
-
-            return $stored;
-        });
-
-        foreach ($documents as $document) {
-            $this->queueDocument->handle($document);
-        }
+        $documents = $this->addDocuments->handle($case, $files);
 
         $this->alertStaff($case, 'New documents from the patient', 'documents');
 

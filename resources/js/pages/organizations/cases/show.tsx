@@ -23,11 +23,15 @@ import {
     Plus,
     ScrollText,
     Stethoscope,
+    Upload,
     UserRound,
+    X,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { toast } from 'sonner';
 import type { ReactNode } from 'react';
+import { AppSelect } from '@/components/app-select';
 import { FormSheet } from '@/components/case/form-sheet';
 import { StepTracker } from '@/components/case/step-tracker';
 import { CaseConversation } from '@/components/case-conversation';
@@ -69,6 +73,11 @@ type Props = {
         priority_label: string;
         last_activity_at: string | null;
         is_demo: boolean;
+        document_upload: {
+            url: string;
+            categories: Array<{ value: string; label: string }>;
+            max_megabytes: number;
+        };
         patient: {
             uuid: string;
             full_name: string;
@@ -208,6 +217,7 @@ type Props = {
                     currency: string;
                 }>;
                 transition_url: string;
+                update_url: string;
             }>;
             approved_recommendations: Array<{
                 id: number;
@@ -247,6 +257,7 @@ type Props = {
                 created_by: string | null;
                 confirmed_by: string | null;
                 transition_url: string;
+                update_url: string;
             }>;
             type_options: Array<{ value: string; label: string }>;
             confirmation_source_options: Array<{
@@ -306,6 +317,7 @@ type Props = {
                 } | null;
                 created_by: string | null;
                 transition_url: string;
+                update_url: string;
             }>;
             status_options: Array<{ value: string; label: string }>;
             priority_options: Array<{ value: string; label: string }>;
@@ -379,6 +391,7 @@ type CaseTab =
     | 'tasks';
 
 type CasePanel =
+    | 'documents'
     | 'review'
     | 'observation'
     | 'recommendation'
@@ -596,8 +609,225 @@ export default function CaseShow({
         patient_response: 'accepted',
     });
 
+    const documentUploadForm = useForm<{ documents: File[]; category: string }>(
+        {
+            documents: [],
+            category: 'medical_report',
+        },
+    );
+
     /** Which side panel is open: adding or editing one kind of record at a time. */
     const [panel, setPanel] = useState<CasePanel | null>(null);
+
+    /** When set, the open panel edits this record (PATCH) instead of creating a new one. */
+    const [editingUrl, setEditingUrl] = useState<string | null>(null);
+    /** True when the proposal panel prepares a new version of the current proposal. */
+    const [proposalRevising, setProposalRevising] = useState(false);
+    /** The appointment being moved to a new time. */
+    const [rescheduling, setRescheduling] = useState<{
+        transition_url: string;
+        external_his_reference: string | null;
+    } | null>(null);
+    const [rescheduleAt, setRescheduleAt] = useState('');
+
+    /**
+     * Turn a datetime-local value (the staff member's local time) into an ISO string
+     * with the offset, so the server stores the moment they picked, not the same
+     * wall-clock time in the server's timezone.
+     */
+    const toServerDateTime = (value: string): string | null =>
+        value ? new Date(value).toISOString() : null;
+
+    /** Turn an ISO date into the value a datetime-local input expects, in local time. */
+    const toLocalInput = (value: string | null): string => {
+        if (!value) {
+            return '';
+        }
+
+        const date = new Date(value);
+        const offset = date.getTimezoneOffset() * 60000;
+
+        return new Date(date.getTime() - offset).toISOString().slice(0, 16);
+    };
+
+    const openProposalPanel = (
+        proposal: {
+            update_url: string;
+            proposed_procedure: string;
+            estimated_cost: string | number | null;
+            currency: string;
+            expected_duration: string | null;
+            required_appointments: number | null;
+            additional_information: string | null;
+            valid_until: string | null;
+            clinical_recommendation: { id: number } | null;
+            responsible_physician: { id: number } | null;
+            line_items: Array<{
+                description: string;
+                quantity: number;
+                unit_cost: string | number | null;
+            }>;
+        },
+        mode: 'edit' | 'revise',
+    ): void => {
+        proposalForm.setData({
+            ...proposalForm.data,
+            responsible_physician_id: proposal.responsible_physician
+                ? String(proposal.responsible_physician.id)
+                : '',
+            clinical_recommendation_id: proposal.clinical_recommendation
+                ? String(proposal.clinical_recommendation.id)
+                : '',
+            proposed_procedure: proposal.proposed_procedure,
+            estimated_cost:
+                proposal.estimated_cost !== null
+                    ? String(proposal.estimated_cost)
+                    : '',
+            currency: proposal.currency,
+            expected_duration: proposal.expected_duration ?? '',
+            required_appointments:
+                proposal.required_appointments !== null
+                    ? String(proposal.required_appointments)
+                    : '',
+            additional_information: proposal.additional_information ?? '',
+            valid_until:
+                mode === 'revise'
+                    ? ''
+                    : (proposal.valid_until ?? '').slice(0, 10),
+            items:
+                proposal.line_items.length > 0
+                    ? proposal.line_items.map((item) => ({
+                          description: item.description,
+                          quantity: String(item.quantity),
+                          unit_cost:
+                              item.unit_cost !== null
+                                  ? String(item.unit_cost)
+                                  : '',
+                      }))
+                    : [{ description: '', quantity: '1', unit_cost: '' }],
+        });
+        setPanel('proposal');
+        setEditingUrl(mode === 'edit' ? proposal.update_url : null);
+        setProposalRevising(mode === 'revise');
+    };
+
+    const openAppointmentEditor = (appointment: {
+        update_url: string;
+        appointment_type: string;
+        proposed_starts_at: string | null;
+        proposed_ends_at: string | null;
+        location: string | null;
+        meeting_instructions: string | null;
+        notes: string | null;
+        external_his_reference: string | null;
+        doctor: { id: number } | null;
+    }): void => {
+        appointmentForm.setData({
+            ...appointmentForm.data,
+            doctor_id: appointment.doctor ? String(appointment.doctor.id) : '',
+            appointment_type: appointment.appointment_type,
+            proposed_starts_at: toLocalInput(appointment.proposed_starts_at),
+            proposed_ends_at: toLocalInput(appointment.proposed_ends_at),
+            location: appointment.location ?? '',
+            meeting_instructions: appointment.meeting_instructions ?? '',
+            notes: appointment.notes ?? '',
+            external_his_reference: appointment.external_his_reference ?? '',
+        });
+        setPanel('appointment');
+        setEditingUrl(appointment.update_url);
+    };
+
+    const openTaskEditor = (task: {
+        update_url: string;
+        title: string;
+        description: string | null;
+        priority: string;
+        due_at: string | null;
+        assigned_user: { id: number } | null;
+    }): void => {
+        taskForm.setData({
+            title: task.title,
+            description: task.description ?? '',
+            assigned_user_id: task.assigned_user
+                ? String(task.assigned_user.id)
+                : '',
+            priority: task.priority,
+            due_at: toLocalInput(task.due_at),
+        });
+        setPanel('task');
+        setEditingUrl(task.update_url);
+    };
+
+    const openFollowUpEditor = (followUp: {
+        update_url: string;
+        title: string;
+        description: string | null;
+        follow_up_type: string;
+        due_at: string | null;
+        assigned_user: { id: number } | null;
+    }): void => {
+        followUpForm.setData({
+            title: followUp.title,
+            description: followUp.description ?? '',
+            follow_up_type: followUp.follow_up_type,
+            due_at: toLocalInput(followUp.due_at),
+            assigned_user_id: followUp.assigned_user
+                ? String(followUp.assigned_user.id)
+                : '',
+        });
+        setPanel('follow_up');
+        setEditingUrl(followUp.update_url);
+    };
+
+    /** The draft recommendation being edited in the panel, or null when writing a new one. */
+    const [editingRecommendation, setEditingRecommendation] = useState<
+        string | null
+    >(null);
+
+    const recommendationUrl = (uuid: string): string =>
+        `/${team.slug}/cases/${patientCase.reference}/clinical/recommendations/${uuid}`;
+
+    const openRecommendationEditor = (recommendation: {
+        uuid: string;
+        recommendation_text: string;
+        supporting_document_uuids: string[];
+    }): void => {
+        setEditingRecommendation(recommendation.uuid);
+        recommendationForm.setData({
+            recommendation_text: recommendation.recommendation_text,
+            supporting_document_uuids: recommendation.supporting_document_uuids,
+            submit_for_approval: false,
+        });
+        setPanel('recommendation');
+    };
+
+    const saveRecommendation = (
+        storeUrl: string,
+        submitForApproval: boolean,
+    ): void => {
+        const options = {
+            preserveScroll: true,
+            onSuccess: () => {
+                setPanel(null);
+                setEditingRecommendation(null);
+                recommendationForm.reset();
+            },
+        };
+
+        recommendationForm.transform((data) => ({
+            ...data,
+            submit_for_approval: submitForApproval,
+        }));
+
+        if (editingRecommendation) {
+            recommendationForm.patch(
+                recommendationUrl(editingRecommendation),
+                options,
+            );
+        } else {
+            recommendationForm.post(storeUrl, options);
+        }
+    };
 
     const runProposalAction = (
         url: string,
@@ -650,8 +880,10 @@ export default function CaseShow({
             hospital_slot_verified?: boolean;
             confirmed_starts_at?: string;
             confirmed_ends_at?: string;
+            proposed_starts_at?: string;
             notes?: string;
         } = {},
+        onSuccess?: () => void,
     ): void => {
         appointmentTransitionForm.transform(() => ({
             action,
@@ -660,12 +892,13 @@ export default function CaseShow({
             confirmed_starts_at: extra.confirmed_starts_at ?? '',
             confirmed_ends_at: extra.confirmed_ends_at ?? '',
             external_his_reference: appointment.external_his_reference ?? '',
-            proposed_starts_at: '',
+            proposed_starts_at: extra.proposed_starts_at ?? '',
             proposed_ends_at: '',
             notes: extra.notes ?? '',
         }));
         appointmentTransitionForm.post(appointment.transition_url, {
             preserveScroll: true,
+            onSuccess,
         });
     };
 
@@ -740,6 +973,28 @@ export default function CaseShow({
         outcome_notes: '',
         cancel: false,
     });
+
+    useEffect(() => {
+        if (panel !== null) {
+            return;
+        }
+
+        // Closing an edit or revise panel without saving must not leave that record's
+        // values in the form, or the next "New ..." panel would start prefilled.
+        if (editingUrl !== null || proposalRevising) {
+            proposalForm.reset();
+            proposalForm.clearErrors();
+            appointmentForm.reset();
+            appointmentForm.clearErrors();
+            taskForm.reset();
+            taskForm.clearErrors();
+            followUpForm.reset();
+            followUpForm.clearErrors();
+        }
+
+        setEditingUrl(null);
+        setProposalRevising(false);
+    }, [panel]);
 
     const clinical = patientCase.clinical;
     const proposals = patientCase.proposals;
@@ -1436,7 +1691,151 @@ export default function CaseShow({
                                 title="Documents"
                                 description={`${patientCase.documents.length} uploaded`}
                                 icon={FileText}
+                                action={
+                                    permissions.canManageCases ? (
+                                        <NewButton
+                                            label="Add documents"
+                                            icon={Upload}
+                                            onClick={() =>
+                                                setPanel('documents')
+                                            }
+                                        />
+                                    ) : undefined
+                                }
                             >
+                                {permissions.canManageCases ? (
+                                    <FormSheet
+                                        open={panel === 'documents'}
+                                        onOpenChange={(open) =>
+                                            setPanel(open ? 'documents' : null)
+                                        }
+                                        title="Add documents"
+                                        description="Files the patient sent by email, WhatsApp or in person. They are processed like portal uploads."
+                                    >
+                                        <form
+                                            className="space-y-4"
+                                            onSubmit={(event) => {
+                                                event.preventDefault();
+                                                documentUploadForm.post(
+                                                    patientCase.document_upload
+                                                        .url,
+                                                    {
+                                                        preserveScroll: true,
+                                                        forceFormData: true,
+                                                        onSuccess: () => {
+                                                            setPanel(null);
+                                                            documentUploadForm.reset();
+                                                        },
+                                                    },
+                                                );
+                                            }}
+                                        >
+                                            <Field label="Files">
+                                                <label
+                                                    htmlFor="case-document-files"
+                                                    className="flex cursor-pointer flex-col items-center gap-1.5 rounded-xl border-2 border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center hover:border-brand/40"
+                                                >
+                                                    <Upload className="size-5 text-brand" />
+                                                    <span className="text-sm font-medium text-slate-900">
+                                                        {documentUploadForm.data
+                                                            .documents.length >
+                                                        0
+                                                            ? `${documentUploadForm.data.documents.length} file(s) chosen`
+                                                            : 'Choose files'}
+                                                    </span>
+                                                    <span className="text-xs text-slate-500">
+                                                        PDF, JPG or PNG, up to{' '}
+                                                        {
+                                                            patientCase
+                                                                .document_upload
+                                                                .max_megabytes
+                                                        }{' '}
+                                                        MB each, 10 at a time.
+                                                    </span>
+                                                    <input
+                                                        id="case-document-files"
+                                                        type="file"
+                                                        multiple
+                                                        accept=".pdf,.jpg,.jpeg,.png"
+                                                        className="sr-only"
+                                                        onChange={(event) =>
+                                                            documentUploadForm.setData(
+                                                                'documents',
+                                                                Array.from(
+                                                                    event.target
+                                                                        .files ??
+                                                                        [],
+                                                                ),
+                                                            )
+                                                        }
+                                                    />
+                                                </label>
+                                                {documentUploadForm.data
+                                                    .documents.length > 0 ? (
+                                                    <ul className="space-y-1 text-xs text-slate-600">
+                                                        {documentUploadForm.data.documents.map(
+                                                            (file) => (
+                                                                <li
+                                                                    key={
+                                                                        file.name
+                                                                    }
+                                                                    className="truncate"
+                                                                >
+                                                                    {file.name}
+                                                                </li>
+                                                            ),
+                                                        )}
+                                                    </ul>
+                                                ) : null}
+                                            </Field>
+                                            <Field label="Type of document">
+                                                <AppSelect
+                                                    value={
+                                                        documentUploadForm.data
+                                                            .category
+                                                    }
+                                                    onChange={(value) =>
+                                                        documentUploadForm.setData(
+                                                            'category',
+                                                            value,
+                                                        )
+                                                    }
+                                                    options={
+                                                        patientCase
+                                                            .document_upload
+                                                            .categories
+                                                    }
+                                                />
+                                            </Field>
+                                            <InputError
+                                                message={
+                                                    documentUploadForm.errors
+                                                        .documents ??
+                                                    Object.entries(
+                                                        documentUploadForm.errors,
+                                                    ).find(([key]) =>
+                                                        key.startsWith(
+                                                            'documents.',
+                                                        ),
+                                                    )?.[1]
+                                                }
+                                            />
+                                            <Button
+                                                type="submit"
+                                                className="h-11 rounded-full bg-brand text-white hover:bg-brand/90"
+                                                disabled={
+                                                    documentUploadForm.processing ||
+                                                    documentUploadForm.data
+                                                        .documents.length === 0
+                                                }
+                                            >
+                                                {documentUploadForm.processing
+                                                    ? 'Uploading…'
+                                                    : 'Add to case'}
+                                            </Button>
+                                        </form>
+                                    </FormSheet>
+                                ) : null}
                                 {patientCase.status ===
                                     'awaiting_coordinator_review' &&
                                 permissions.canUpdateStatus ? (
@@ -1842,11 +2241,15 @@ export default function CaseShow({
                                                 permissions.canApproveClinical ? (
                                                     <NewButton
                                                         label="Write recommendation"
-                                                        onClick={() =>
+                                                        onClick={() => {
+                                                            setEditingRecommendation(
+                                                                null,
+                                                            );
+                                                            recommendationForm.reset();
                                                             setPanel(
                                                                 'recommendation',
-                                                            )
-                                                        }
+                                                            );
+                                                        }}
                                                     />
                                                 ) : undefined
                                             }
@@ -1925,6 +2328,80 @@ export default function CaseShow({
                                                                             ` · ${approval.outcome_label} by ${approval.approver ?? 'a doctor'} on ${new Date(approval.decided_at).toLocaleDateString()}${approval.notes ? ` (${approval.notes})` : ''}`,
                                                                     )}
                                                                 </p>
+                                                                {permissions.canApproveClinical &&
+                                                                [
+                                                                    'draft',
+                                                                    'rejected',
+                                                                ].includes(
+                                                                    recommendation.status,
+                                                                ) &&
+                                                                !recommendation.is_ai_generated ? (
+                                                                    <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-slate-50 px-3 py-2.5">
+                                                                        <p className="text-xs text-slate-600">
+                                                                            {recommendation.status ===
+                                                                            'rejected'
+                                                                                ? 'Rejected. Edit it and send it for approval again.'
+                                                                                : 'Draft. Send it for approval when it is ready.'}
+                                                                        </p>
+                                                                        <div className="flex gap-2">
+                                                                            <Button
+                                                                                type="button"
+                                                                                size="sm"
+                                                                                variant="outline"
+                                                                                className="rounded-full"
+                                                                                onClick={() =>
+                                                                                    openRecommendationEditor(
+                                                                                        recommendation,
+                                                                                    )
+                                                                                }
+                                                                            >
+                                                                                <Pencil className="size-3.5" />
+                                                                                Edit
+                                                                            </Button>
+                                                                            <Button
+                                                                                type="button"
+                                                                                size="sm"
+                                                                                className="rounded-full bg-brand text-white hover:bg-brand/90"
+                                                                                disabled={
+                                                                                    recommendationForm.processing
+                                                                                }
+                                                                                onClick={() => {
+                                                                                    recommendationForm.transform(
+                                                                                        () => ({
+                                                                                            recommendation_text:
+                                                                                                recommendation.recommendation_text,
+                                                                                            supporting_document_uuids:
+                                                                                                recommendation.supporting_document_uuids,
+                                                                                            submit_for_approval: true,
+                                                                                        }),
+                                                                                    );
+                                                                                    recommendationForm.patch(
+                                                                                        recommendationUrl(
+                                                                                            recommendation.uuid,
+                                                                                        ),
+                                                                                        {
+                                                                                            preserveScroll: true,
+                                                                                            onError:
+                                                                                                (
+                                                                                                    errors,
+                                                                                                ) =>
+                                                                                                    toast.error(
+                                                                                                        Object.values(
+                                                                                                            errors,
+                                                                                                        )[0] ??
+                                                                                                            'That could not be sent. Please try again.',
+                                                                                                    ),
+                                                                                        },
+                                                                                    );
+                                                                                }}
+                                                                            >
+                                                                                Send
+                                                                                for
+                                                                                approval
+                                                                            </Button>
+                                                                        </div>
+                                                                    </div>
+                                                                ) : null}
                                                                 {permissions.canApproveClinical &&
                                                                 recommendation.status ===
                                                                     'awaiting_approval' &&
@@ -2174,32 +2651,21 @@ export default function CaseShow({
                                                             : null,
                                                     )
                                                 }
-                                                title="Write a recommendation"
+                                                title={
+                                                    editingRecommendation
+                                                        ? 'Edit recommendation'
+                                                        : 'Write a recommendation'
+                                                }
                                                 description="Another doctor approves it before a treatment proposal can be based on it."
                                             >
                                                 <form
                                                     className="space-y-4"
                                                     onSubmit={(event) => {
                                                         event.preventDefault();
-                                                        recommendationForm.transform(
-                                                            (data) => ({
-                                                                ...data,
-                                                                submit_for_approval: false,
-                                                            }),
-                                                        );
-                                                        recommendationForm.post(
+                                                        saveRecommendation(
                                                             clinical.urls
                                                                 .store_recommendation,
-                                                            {
-                                                                preserveScroll: true,
-                                                                onSuccess:
-                                                                    () => {
-                                                                        setPanel(
-                                                                            null,
-                                                                        );
-                                                                        recommendationForm.reset();
-                                                                    },
-                                                            },
+                                                            false,
                                                         );
                                                     }}
                                                 >
@@ -2244,29 +2710,14 @@ export default function CaseShow({
                                                             disabled={
                                                                 recommendationForm.processing
                                                             }
-                                                            onClick={() => {
-                                                                recommendationForm.transform(
-                                                                    (data) => ({
-                                                                        ...data,
-                                                                        submit_for_approval: true,
-                                                                    }),
-                                                                );
-                                                                recommendationForm.post(
+                                                            onClick={() =>
+                                                                saveRecommendation(
                                                                     clinical
                                                                         .urls
                                                                         .store_recommendation,
-                                                                    {
-                                                                        preserveScroll: true,
-                                                                        onSuccess:
-                                                                            () => {
-                                                                                setPanel(
-                                                                                    null,
-                                                                                );
-                                                                                recommendationForm.reset();
-                                                                            },
-                                                                    },
-                                                                );
-                                                            }}
+                                                                    true,
+                                                                )
+                                                            }
                                                         >
                                                             Send for approval
                                                         </Button>
@@ -2613,6 +3064,54 @@ export default function CaseShow({
                                                                 </p>
                                                                 <div className="flex flex-wrap gap-2">
                                                                     {permissions.canManageProposals &&
+                                                                    [
+                                                                        'draft',
+                                                                        'awaiting_clinical_approval',
+                                                                    ].includes(
+                                                                        proposal.status,
+                                                                    ) ? (
+                                                                        <Button
+                                                                            type="button"
+                                                                            size="sm"
+                                                                            variant="outline"
+                                                                            className="rounded-full"
+                                                                            onClick={() =>
+                                                                                openProposalPanel(
+                                                                                    proposal,
+                                                                                    'edit',
+                                                                                )
+                                                                            }
+                                                                        >
+                                                                            <Pencil className="size-3.5" />
+                                                                            Edit
+                                                                        </Button>
+                                                                    ) : null}
+                                                                    {permissions.canManageProposals &&
+                                                                    [
+                                                                        'approved',
+                                                                        'sent_to_patient',
+                                                                        'patient_declined',
+                                                                        'expired',
+                                                                    ].includes(
+                                                                        proposal.status,
+                                                                    ) ? (
+                                                                        <Button
+                                                                            type="button"
+                                                                            size="sm"
+                                                                            variant="outline"
+                                                                            className="rounded-full"
+                                                                            onClick={() =>
+                                                                                openProposalPanel(
+                                                                                    proposal,
+                                                                                    'revise',
+                                                                                )
+                                                                            }
+                                                                        >
+                                                                            <Pencil className="size-3.5" />
+                                                                            Revise
+                                                                        </Button>
+                                                                    ) : null}
+                                                                    {permissions.canManageProposals &&
                                                                     proposal.status ===
                                                                         'draft' ? (
                                                                         <Button
@@ -2802,8 +3301,18 @@ export default function CaseShow({
                                                     open ? 'proposal' : null,
                                                 )
                                             }
-                                            title="New treatment proposal"
-                                            description="Saved as a draft. A doctor approves it before it can be sent to the patient."
+                                            title={
+                                                editingUrl
+                                                    ? 'Edit proposal'
+                                                    : proposalRevising
+                                                      ? 'Revise proposal'
+                                                      : 'New treatment proposal'
+                                            }
+                                            description={
+                                                proposalRevising
+                                                    ? 'Starts from the current proposal. Saving creates a new version as a draft, and the current one is marked as revised.'
+                                                    : 'Saved as a draft. A doctor approves it before it can be sent to the patient.'
+                                            }
                                         >
                                             <form
                                                 className="space-y-4"
@@ -2883,8 +3392,12 @@ export default function CaseShow({
                                                                 ),
                                                         }),
                                                     );
-                                                    proposalForm.post(
-                                                        proposals.urls.store,
+                                                    (editingUrl
+                                                        ? proposalForm.patch
+                                                        : proposalForm.post)(
+                                                        editingUrl ??
+                                                            proposals.urls
+                                                                .store,
                                                         {
                                                             preserveScroll: true,
                                                             onSuccess: () => {
@@ -3079,7 +3592,14 @@ export default function CaseShow({
                                                 <InputError
                                                     message={
                                                         proposalForm.errors
-                                                            .proposed_procedure
+                                                            .proposed_procedure ??
+                                                        (
+                                                            proposalForm.errors as Record<
+                                                                string,
+                                                                | string
+                                                                | undefined
+                                                            >
+                                                        ).proposal
                                                     }
                                                 />
                                                 <Button
@@ -3222,11 +3742,85 @@ export default function CaseShow({
                                                                             ? 'Next: check the slot with the hospital scheduling team.'
                                                                             : appointment.status ===
                                                                                 'confirmed'
-                                                                              ? `Confirmed${appointment.confirmed_by ? ` by ${appointment.confirmed_by}` : ''}. The patient was emailed the details.`
+                                                                              ? `Confirmed${appointment.confirmed_by ? ` by ${appointment.confirmed_by}` : ''}. The patient was told the details (see Messages).`
                                                                               : 'Once the hospital confirms the slot, confirm it here. The patient is emailed the date, time and place.'}
                                                                     </p>
                                                                     {permissions.canManageAppointments ? (
                                                                         <div className="flex flex-wrap gap-2">
+                                                                            {[
+                                                                                'proposed',
+                                                                                'awaiting_confirmation',
+                                                                                'rescheduled',
+                                                                            ].includes(
+                                                                                appointment.status,
+                                                                            ) ? (
+                                                                                <Button
+                                                                                    type="button"
+                                                                                    size="sm"
+                                                                                    variant="outline"
+                                                                                    className="rounded-full"
+                                                                                    onClick={() =>
+                                                                                        openAppointmentEditor(
+                                                                                            appointment,
+                                                                                        )
+                                                                                    }
+                                                                                >
+                                                                                    <Pencil className="size-3.5" />
+                                                                                    Edit
+                                                                                </Button>
+                                                                            ) : null}
+                                                                            {[
+                                                                                'awaiting_confirmation',
+                                                                                'confirmed',
+                                                                            ].includes(
+                                                                                appointment.status,
+                                                                            ) ? (
+                                                                                <Button
+                                                                                    type="button"
+                                                                                    size="sm"
+                                                                                    variant="outline"
+                                                                                    className="rounded-full"
+                                                                                    onClick={() => {
+                                                                                        setRescheduling(
+                                                                                            appointment,
+                                                                                        );
+                                                                                        setRescheduleAt(
+                                                                                            toLocalInput(
+                                                                                                appointment.confirmed_starts_at ??
+                                                                                                    appointment.proposed_starts_at,
+                                                                                            ),
+                                                                                        );
+                                                                                    }}
+                                                                                >
+                                                                                    <CalendarDays className="size-3.5" />
+                                                                                    Reschedule
+                                                                                </Button>
+                                                                            ) : null}
+                                                                            {appointment.status ===
+                                                                            'confirmed' ? (
+                                                                                <Button
+                                                                                    type="button"
+                                                                                    size="sm"
+                                                                                    className="rounded-full bg-brand text-white hover:bg-brand/90"
+                                                                                    disabled={
+                                                                                        appointmentTransitionForm.processing
+                                                                                    }
+                                                                                    onClick={() =>
+                                                                                        runAppointmentAction(
+                                                                                            appointment,
+                                                                                            'complete',
+                                                                                            {
+                                                                                                notes: 'Appointment took place.',
+                                                                                            },
+                                                                                        )
+                                                                                    }
+                                                                                >
+                                                                                    <Check className="size-3.5" />
+                                                                                    Mark
+                                                                                    as
+                                                                                    completed
+                                                                                </Button>
+                                                                            ) : null}
                                                                             <Button
                                                                                 type="button"
                                                                                 size="sm"
@@ -3341,7 +3935,11 @@ export default function CaseShow({
                                                     open ? 'appointment' : null,
                                                 )
                                             }
-                                            title="Propose an appointment"
+                                            title={
+                                                editingUrl
+                                                    ? 'Edit appointment'
+                                                    : 'Propose an appointment'
+                                            }
                                             description="Pick a time to check with the hospital. The patient is told once the hospital confirms it."
                                         >
                                             <form
@@ -3367,10 +3965,13 @@ export default function CaseShow({
                                                             appointment_type:
                                                                 data.appointment_type,
                                                             proposed_starts_at:
-                                                                data.proposed_starts_at,
+                                                                toServerDateTime(
+                                                                    data.proposed_starts_at,
+                                                                ),
                                                             proposed_ends_at:
-                                                                data.proposed_ends_at ||
-                                                                null,
+                                                                toServerDateTime(
+                                                                    data.proposed_ends_at,
+                                                                ),
                                                             location:
                                                                 data.location ||
                                                                 null,
@@ -3385,8 +3986,12 @@ export default function CaseShow({
                                                                 null,
                                                         }),
                                                     );
-                                                    appointmentForm.post(
-                                                        appointments.urls.store,
+                                                    (editingUrl
+                                                        ? appointmentForm.patch
+                                                        : appointmentForm.post)(
+                                                        editingUrl ??
+                                                            appointments.urls
+                                                                .store,
                                                         {
                                                             preserveScroll: true,
                                                             onSuccess: () => {
@@ -3547,7 +4152,81 @@ export default function CaseShow({
                                                         appointmentForm.processing
                                                     }
                                                 >
-                                                    Save proposed appointment
+                                                    {editingUrl
+                                                        ? 'Save changes'
+                                                        : 'Save proposed appointment'}
+                                                </Button>
+                                            </form>
+                                        </FormSheet>
+                                    ) : null}
+                                    {permissions.canManageAppointments ? (
+                                        <FormSheet
+                                            open={rescheduling !== null}
+                                            onOpenChange={(open) => {
+                                                if (!open) {
+                                                    setRescheduling(null);
+                                                }
+                                            }}
+                                            title="Reschedule appointment"
+                                            description="Pick the new time to check with the hospital. Once they confirm it, confirm it here and the patient is emailed the new details."
+                                        >
+                                            <form
+                                                className="space-y-4"
+                                                onSubmit={(event) => {
+                                                    event.preventDefault();
+
+                                                    if (rescheduling) {
+                                                        runAppointmentAction(
+                                                            rescheduling,
+                                                            'reschedule',
+                                                            {
+                                                                proposed_starts_at:
+                                                                    toServerDateTime(
+                                                                        rescheduleAt,
+                                                                    ) ??
+                                                                    undefined,
+                                                                notes: 'Rescheduled from the case page.',
+                                                            },
+                                                            () =>
+                                                                setRescheduling(
+                                                                    null,
+                                                                ),
+                                                        );
+                                                    }
+                                                }}
+                                            >
+                                                <Field label="New date and time">
+                                                    <Input
+                                                        type="datetime-local"
+                                                        value={rescheduleAt}
+                                                        onChange={(event) =>
+                                                            setRescheduleAt(
+                                                                event.target
+                                                                    .value,
+                                                            )
+                                                        }
+                                                    />
+                                                </Field>
+                                                <InputError
+                                                    message={
+                                                        (
+                                                            appointmentTransitionForm.errors as Record<
+                                                                string,
+                                                                | string
+                                                                | undefined
+                                                            >
+                                                        ).appointment
+                                                    }
+                                                />
+                                                <Button
+                                                    type="submit"
+                                                    className="h-11 rounded-full bg-brand text-white hover:bg-brand/90"
+                                                    disabled={
+                                                        appointmentTransitionForm.processing ||
+                                                        rescheduleAt === ''
+                                                    }
+                                                >
+                                                    Move appointment
                                                 </Button>
                                             </form>
                                         </FormSheet>
@@ -4160,6 +4839,51 @@ export default function CaseShow({
                                                                         Start
                                                                     </Button>
                                                                 ) : null}
+                                                                {permissions.canManageTasks &&
+                                                                !finished ? (
+                                                                    <>
+                                                                        <Button
+                                                                            type="button"
+                                                                            size="icon"
+                                                                            variant="ghost"
+                                                                            className="size-7 shrink-0 rounded-full text-slate-500 hover:text-slate-900"
+                                                                            aria-label={`Edit ${task.title}`}
+                                                                            title="Edit task"
+                                                                            onClick={() =>
+                                                                                openTaskEditor(
+                                                                                    task,
+                                                                                )
+                                                                            }
+                                                                        >
+                                                                            <Pencil className="size-3.5" />
+                                                                        </Button>
+                                                                        <Button
+                                                                            type="button"
+                                                                            size="icon"
+                                                                            variant="ghost"
+                                                                            className="size-7 shrink-0 rounded-full text-slate-500 hover:text-rose-700"
+                                                                            aria-label={`Cancel ${task.title}`}
+                                                                            title="Cancel task"
+                                                                            disabled={
+                                                                                taskTransitionForm.processing
+                                                                            }
+                                                                            onClick={() => {
+                                                                                if (
+                                                                                    window.confirm(
+                                                                                        'Cancel this task? It will be kept in the history.',
+                                                                                    )
+                                                                                ) {
+                                                                                    runTaskTransition(
+                                                                                        task.transition_url,
+                                                                                        'cancelled',
+                                                                                    );
+                                                                                }
+                                                                            }}
+                                                                        >
+                                                                            <X className="size-3.5" />
+                                                                        </Button>
+                                                                    </>
+                                                                ) : null}
                                                             </li>
                                                         );
                                                     })}
@@ -4175,7 +4899,11 @@ export default function CaseShow({
                                                                 : null,
                                                         )
                                                     }
-                                                    title="New task"
+                                                    title={
+                                                        editingUrl
+                                                            ? 'Edit task'
+                                                            : 'New task'
+                                                    }
                                                     description="Something someone on the team needs to do for this case."
                                                 >
                                                     <form
@@ -4198,14 +4926,17 @@ export default function CaseShow({
                                                                             : null,
                                                                     priority:
                                                                         data.priority,
-                                                                    due_at:
-                                                                        data.due_at ||
-                                                                        null,
+                                                                    due_at: toServerDateTime(
+                                                                        data.due_at,
+                                                                    ),
                                                                 }),
                                                             );
-                                                            taskForm.post(
-                                                                tasks.urls
-                                                                    .store,
+                                                            (editingUrl
+                                                                ? taskForm.patch
+                                                                : taskForm.post)(
+                                                                editingUrl ??
+                                                                    tasks.urls
+                                                                        .store,
                                                                 {
                                                                     preserveScroll: true,
                                                                     onSuccess:
@@ -4341,11 +5072,37 @@ export default function CaseShow({
                                                                     </SelectContent>
                                                                 </Select>
                                                             </div>
+                                                            <div className="grid gap-2">
+                                                                <Label>
+                                                                    Due
+                                                                    (optional)
+                                                                </Label>
+                                                                <Input
+                                                                    type="datetime-local"
+                                                                    value={
+                                                                        taskForm
+                                                                            .data
+                                                                            .due_at
+                                                                    }
+                                                                    onChange={(
+                                                                        event,
+                                                                    ) =>
+                                                                        taskForm.setData(
+                                                                            'due_at',
+                                                                            event
+                                                                                .target
+                                                                                .value,
+                                                                        )
+                                                                    }
+                                                                />
+                                                            </div>
                                                         </div>
                                                         <InputError
                                                             message={
                                                                 taskForm.errors
                                                                     .title ||
+                                                                taskForm.errors
+                                                                    .due_at ||
                                                                 taskForm.errors
                                                                     .task
                                                             }
@@ -4357,7 +5114,9 @@ export default function CaseShow({
                                                                 taskForm.processing
                                                             }
                                                         >
-                                                            Save task
+                                                            {editingUrl
+                                                                ? 'Save changes'
+                                                                : 'Save task'}
                                                         </Button>
                                                     </form>
                                                 </FormSheet>
@@ -4451,6 +5210,21 @@ export default function CaseShow({
                                                                             <div className="flex gap-1.5">
                                                                                 <Button
                                                                                     type="button"
+                                                                                    size="icon"
+                                                                                    variant="ghost"
+                                                                                    className="size-7 rounded-full text-slate-500 hover:text-slate-900"
+                                                                                    aria-label={`Edit ${followUp.title}`}
+                                                                                    title="Edit follow-up"
+                                                                                    onClick={() =>
+                                                                                        openFollowUpEditor(
+                                                                                            followUp,
+                                                                                        )
+                                                                                    }
+                                                                                >
+                                                                                    <Pencil className="size-3.5" />
+                                                                                </Button>
+                                                                                <Button
+                                                                                    type="button"
                                                                                     size="sm"
                                                                                     variant="ghost"
                                                                                     className="h-7 rounded-full px-2.5 text-xs text-slate-600"
@@ -4510,7 +5284,11 @@ export default function CaseShow({
                                                                 : null,
                                                         )
                                                     }
-                                                    title="Schedule a follow-up"
+                                                    title={
+                                                        editingUrl
+                                                            ? 'Edit follow-up'
+                                                            : 'Schedule a follow-up'
+                                                    }
                                                     description="A check-in with the patient after treatment, such as a review call or travel return."
                                                 >
                                                     <form
@@ -4525,7 +5303,9 @@ export default function CaseShow({
                                                                         null,
                                                                     follow_up_type:
                                                                         data.follow_up_type,
-                                                                    due_at: data.due_at,
+                                                                    due_at: toServerDateTime(
+                                                                        data.due_at,
+                                                                    ),
                                                                     assigned_user_id:
                                                                         data.assigned_user_id &&
                                                                         data.assigned_user_id !==
@@ -4536,9 +5316,13 @@ export default function CaseShow({
                                                                             : null,
                                                                 }),
                                                             );
-                                                            followUpForm.post(
-                                                                followUps.urls
-                                                                    .store,
+                                                            (editingUrl
+                                                                ? followUpForm.patch
+                                                                : followUpForm.post)(
+                                                                editingUrl ??
+                                                                    followUps
+                                                                        .urls
+                                                                        .store,
                                                                 {
                                                                     preserveScroll: true,
                                                                     onSuccess:
@@ -4720,7 +5504,9 @@ export default function CaseShow({
                                                                 followUpForm.processing
                                                             }
                                                         >
-                                                            Save follow-up
+                                                            {editingUrl
+                                                                ? 'Save changes'
+                                                                : 'Save follow-up'}
                                                         </Button>
                                                     </form>
                                                 </FormSheet>

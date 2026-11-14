@@ -25,6 +25,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
     'status',
     'priority',
     'due_at',
+    'last_overdue_reminder_at',
     'completed_at',
     'is_demo',
 ])]
@@ -87,6 +88,7 @@ class CaseTask extends Model
             'status' => CaseTaskStatus::class,
             'priority' => CaseTaskPriority::class,
             'due_at' => 'datetime',
+            'last_overdue_reminder_at' => 'datetime',
             'completed_at' => 'datetime',
             'is_demo' => 'boolean',
         ];

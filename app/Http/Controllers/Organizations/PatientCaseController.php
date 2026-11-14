@@ -14,6 +14,7 @@ use App\Enums\ClinicalRecommendationStatus;
 use App\Enums\CommunicationChannel;
 use App\Enums\CommunicationDirection;
 use App\Enums\DoctorReviewOutcome;
+use App\Enums\DocumentCategory;
 use App\Enums\FollowUpStatus;
 use App\Enums\FollowUpType;
 use App\Enums\TeamPermission;
@@ -22,6 +23,7 @@ use App\Enums\TravelArrangementStatus;
 use App\Enums\VisaAssistanceStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Organizations\FilterPatientCasesRequest;
+use App\Http\Requests\Organizations\StoreStaffCaseRequest;
 use App\Models\Membership;
 use App\Models\PatientCase;
 use App\Models\SavedCaseView;
@@ -156,9 +158,36 @@ class PatientCaseController extends Controller
                 'canAssignCases' => $user->hasTeamPermission($current_team, TeamPermission::AssignCases),
                 'canUpdateStatus' => $user->hasTeamPermission($current_team, TeamPermission::UpdateCaseStatus),
                 'canExport' => $user->hasTeamPermission($current_team, TeamPermission::ManageCases),
+                'canCreateCases' => $user->hasTeamPermission($current_team, TeamPermission::ManageCases),
+            ],
+            'newCase' => [
+                'url' => route('organizations.cases.store', ['current_team' => $current_team->slug]),
+                'sources' => collect(StoreStaffCaseRequest::SOURCES)
+                    ->map(fn (string $label, string $value) => ['value' => $value, 'label' => $label])
+                    ->values(),
+                'languages' => collect(config('careflow.portal.supported_languages', ['en']))
+                    ->map(fn (string $code) => ['value' => $code, 'label' => self::LANGUAGE_NAMES[$code] ?? strtoupper($code)])
+                    ->values(),
+                'departments' => $current_team->departments()
+                    ->where('is_active', true)
+                    ->orderBy('name')
+                    ->get(['id', 'name'])
+                    ->map(fn ($department) => ['value' => (string) $department->id, 'label' => $department->name])
+                    ->values(),
             ],
         ]);
     }
+
+    /**
+     * @var array<string, string>
+     */
+    private const LANGUAGE_NAMES = [
+        'en' => 'English',
+        'tr' => 'Turkish',
+        'ar' => 'Arabic',
+        'ru' => 'Russian',
+        'az' => 'Azerbaijani',
+    ];
 
     public function show(
         Request $request,
@@ -287,6 +316,17 @@ class PatientCaseController extends Controller
                 'priority_label' => $case->priority->label(),
                 'last_activity_at' => $case->last_activity_at?->toIso8601String(),
                 'is_demo' => $case->is_demo,
+                'document_upload' => [
+                    'url' => route('organizations.documents.store', [
+                        'current_team' => $current_team->slug,
+                        'case' => $case->reference,
+                    ]),
+                    'categories' => collect(DocumentCategory::cases())
+                        ->reject(fn (DocumentCategory $category) => $category === DocumentCategory::Unknown)
+                        ->map(fn (DocumentCategory $category) => ['value' => $category->value, 'label' => $category->label()])
+                        ->values(),
+                    'max_megabytes' => (int) (config('careflow.documents.max_upload_kilobytes', 10240) / 1024),
+                ],
                 'patient' => [
                     'uuid' => $case->patient->uuid,
                     'full_name' => $case->patient->fullName(),
@@ -457,6 +497,11 @@ class PatientCaseController extends Controller
                             'case' => $case->reference,
                             'proposal' => $proposal->uuid,
                         ]),
+                        'update_url' => route('organizations.proposals.update', [
+                            'current_team' => $current_team->slug,
+                            'case' => $case->reference,
+                            'proposal' => $proposal->uuid,
+                        ]),
                     ]),
                     'approved_recommendations' => $case->clinicalRecommendations()
                         ->where('status', ClinicalRecommendationStatus::Approved)
@@ -506,6 +551,11 @@ class PatientCaseController extends Controller
                         'created_by' => $appointment->createdBy?->name,
                         'confirmed_by' => $appointment->confirmedBy?->name,
                         'transition_url' => route('organizations.appointments.transition', [
+                            'current_team' => $current_team->slug,
+                            'case' => $case->reference,
+                            'appointment' => $appointment->uuid,
+                        ]),
+                        'update_url' => route('organizations.appointments.update', [
                             'current_team' => $current_team->slug,
                             'case' => $case->reference,
                             'appointment' => $appointment->uuid,
@@ -568,6 +618,11 @@ class PatientCaseController extends Controller
                         'assigned_user' => $task->assignedUser?->only(['id', 'name', 'email']),
                         'created_by' => $task->createdBy?->name,
                         'transition_url' => route('organizations.tasks.transition', [
+                            'current_team' => $current_team->slug,
+                            'case' => $case->reference,
+                            'task' => $task->uuid,
+                        ]),
+                        'update_url' => route('organizations.tasks.update', [
                             'current_team' => $current_team->slug,
                             'case' => $case->reference,
                             'task' => $task->uuid,

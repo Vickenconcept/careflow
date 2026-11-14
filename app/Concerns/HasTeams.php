@@ -122,10 +122,28 @@ trait HasTeams
      */
     public function teamRole(Team $team): ?TeamRole
     {
-        return $this->teamMemberships()
+        $lookup = fn (): ?TeamRole => $this->teamMemberships()
             ->where('team_id', $team->id)
             ->first()
             ?->role;
+
+        // Permission checks ask for the role many times per page (the header count
+        // alone does it a dozen times), so remember it for the current web request.
+        // Console commands and tests always read fresh, as roles can change mid-run.
+        if (app()->runningInConsole() || ! app()->bound('request')) {
+            return $lookup();
+        }
+
+        $attributes = request()->attributes;
+        $key = 'careflow.team_role.'.$this->getKey().'.'.$team->getKey();
+
+        if (! $attributes->has($key)) {
+            $attributes->set($key, $lookup() ?? false);
+        }
+
+        $role = $attributes->get($key);
+
+        return $role instanceof TeamRole ? $role : null;
     }
 
     /**

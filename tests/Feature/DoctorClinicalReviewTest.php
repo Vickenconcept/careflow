@@ -308,3 +308,36 @@ test('case workspace exposes clinical review payloads to authorized clinicians',
             ->where('permissions.canApproveClinical', true)
             ->where('case.clinical.disclaimer', 'Clinical evaluations and approvals are human-authored. AI document outputs are never clinically approved content.'));
 });
+
+test('a saved draft recommendation can be edited and sent for approval later', function () {
+    $doctor = User::factory()->create();
+    $team = Team::factory()->create();
+    $team->members()->attach($doctor, ['role' => TeamRole::Doctor->value]);
+    $doctor->switchTeam($team);
+
+    $case = clinicalCase($team, ['assigned_doctor_id' => $doctor->id]);
+    $recommendation = ClinicalRecommendation::factory()->create([
+        'team_id' => $team->id,
+        'patient_case_id' => $case->id,
+        'author_user_id' => $doctor->id,
+        'status' => ClinicalRecommendationStatus::Draft,
+        'recommendation_text' => 'First draft',
+        'is_ai_generated' => false,
+        'is_current' => true,
+    ]);
+
+    $this->actingAs($doctor)
+        ->patch(route('organizations.clinical.recommendations.update', [
+            'current_team' => $team,
+            'case' => $case,
+            'recommendation' => $recommendation,
+        ]), [
+            'recommendation_text' => 'Revised recommendation',
+            'submit_for_approval' => true,
+        ])
+        ->assertRedirect()
+        ->assertSessionHasNoErrors();
+
+    expect($recommendation->fresh()->recommendation_text)->toBe('Revised recommendation')
+        ->and($recommendation->fresh()->status)->toBe(ClinicalRecommendationStatus::AwaitingApproval);
+});

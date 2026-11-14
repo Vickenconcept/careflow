@@ -2,8 +2,7 @@
 
 namespace App\Http\Middleware;
 
-use App\Enums\CaseTaskStatus;
-use App\Models\CaseTask;
+use App\Http\Controllers\Organizations\WorkQueueController;
 use App\Support\Impersonation;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
@@ -66,11 +65,7 @@ class HandleInertiaRequests extends Middleware
                 ];
             },
             'pendingWorkCount' => fn () => $user?->currentTeam
-                ? CaseTask::query()
-                    ->where('team_id', $user->current_team_id)
-                    ->where('assigned_user_id', $user->id)
-                    ->whereIn('status', [CaseTaskStatus::Open, CaseTaskStatus::InProgress])
-                    ->count()
+                ? WorkQueueController::attentionCount($user, $user->currentTeam)
                 : 0,
         ];
     }

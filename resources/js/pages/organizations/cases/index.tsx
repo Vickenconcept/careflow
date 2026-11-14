@@ -13,6 +13,7 @@ import {
     Languages,
     MapPin,
     PanelRight,
+    Plus,
     RefreshCcw,
     RotateCcw,
     Save,
@@ -33,6 +34,8 @@ import {
     DataTableHeader,
     DataTableRow,
 } from '@/components/data-table';
+import { NewCaseSheet } from '@/components/case/new-case-sheet';
+import type { NewCaseOptions } from '@/components/case/new-case-sheet';
 import { EmptyState } from '@/components/empty-state';
 import PageTabs from '@/components/page-tabs';
 import InputError from '@/components/input-error';
@@ -127,7 +130,9 @@ type Props = {
         canAssignCases: boolean;
         canUpdateStatus: boolean;
         canExport?: boolean;
+        canCreateCases?: boolean;
     };
+    newCase?: NewCaseOptions;
     quickViewCounts?: Record<string, number>;
     savedViews?: SavedView[];
 };
@@ -152,14 +157,15 @@ const STATUS_STYLES: Record<string, string> = {
     awaiting_documents: 'border-amber-200 bg-amber-50 text-amber-700',
     documents_received: 'border-sky-200 bg-sky-50 text-sky-700',
     ai_processing: 'border-violet-200 bg-violet-50 text-violet-700',
-    awaiting_coordinator_review: 'border-indigo-200 bg-indigo-50 text-indigo-700',
+    awaiting_coordinator_review:
+        'border-indigo-200 bg-indigo-50 text-indigo-700',
     awaiting_doctor_review: 'border-indigo-200 bg-indigo-50 text-indigo-700',
     additional_information_required:
         'border-amber-200 bg-amber-50 text-amber-700',
-    treatment_proposal_preparation:
-        'border-cyan-200 bg-cyan-50 text-cyan-700',
+    treatment_proposal_preparation: 'border-cyan-200 bg-cyan-50 text-cyan-700',
     proposal_sent: 'border-emerald-200 bg-emerald-50 text-emerald-700',
-    awaiting_patient_response: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+    awaiting_patient_response:
+        'border-emerald-200 bg-emerald-50 text-emerald-700',
     appointment_planning: 'border-teal-200 bg-teal-50 text-teal-700',
     travel_coordination: 'border-teal-200 bg-teal-50 text-teal-700',
     treatment_scheduled: 'border-teal-200 bg-teal-50 text-teal-700',
@@ -227,7 +233,9 @@ export default function CasesIndex({
     permissions = { canAssignCases: false, canUpdateStatus: false },
     quickViewCounts = {},
     savedViews = [],
+    newCase,
 }: Props) {
+    const [creatingCase, setCreatingCase] = useState(false);
     const [savingView, setSavingView] = useState(false);
     const [viewName, setViewName] = useState('');
     const [viewError, setViewError] = useState<string | null>(null);
@@ -244,7 +252,10 @@ export default function CasesIndex({
             department_id: filters.department_id,
             assignment: filters.assignment,
             sort: filters.sort !== 'recent' ? filters.sort : null,
-        }).filter(([, value]) => value !== null && value !== undefined && value !== ''),
+        }).filter(
+            ([, value]) =>
+                value !== null && value !== undefined && value !== '',
+        ),
     );
     const hasFilters = Object.keys(currentFilters).length > 0;
 
@@ -422,14 +433,16 @@ export default function CasesIndex({
         }
     }, [cases.data, manageOpen, selectedCase?.id]);
 
-    const applyFilters = (overrides: Partial<{
-        search: string;
-        status: string;
-        priority: string;
-        departmentId: string;
-        assignment: string;
-        sort: string;
-    }> = {}) => {
+    const applyFilters = (
+        overrides: Partial<{
+            search: string;
+            status: string;
+            priority: string;
+            departmentId: string;
+            assignment: string;
+            sort: string;
+        }> = {},
+    ) => {
         const nextSearch = overrides.search ?? search;
         const nextStatus = overrides.status ?? status;
         const nextPriority = overrides.priority ?? priority;
@@ -445,8 +458,7 @@ export default function CasesIndex({
                 priority: nextPriority === ALL ? undefined : nextPriority,
                 department_id:
                     nextDepartmentId === ALL ? undefined : nextDepartmentId,
-                assignment:
-                    nextAssignment === ALL ? undefined : nextAssignment,
+                assignment: nextAssignment === ALL ? undefined : nextAssignment,
                 sort: nextSort || undefined,
             },
             {
@@ -550,6 +562,13 @@ export default function CasesIndex({
     return (
         <TooltipProvider>
             <Head title="Cases" />
+            {newCase ? (
+                <NewCaseSheet
+                    open={creatingCase}
+                    onOpenChange={setCreatingCase}
+                    options={newCase}
+                />
+            ) : null}
             <div className="space-y-5 p-4 md:p-6">
                 <div className="flex flex-wrap items-start justify-between gap-4">
                     <div className="space-y-2">
@@ -558,8 +577,7 @@ export default function CasesIndex({
                         </h1>
                         <div className="flex flex-wrap items-center gap-2 text-sm text-slate-500">
                             <span className="font-medium text-slate-700">
-                                {caseCount}{' '}
-                                {caseCount === 1 ? 'case' : 'cases'}
+                                {caseCount} {caseCount === 1 ? 'case' : 'cases'}
                             </span>
                             {activeFilterChips.length > 0 ? (
                                 <span className="inline-flex items-center rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-600">
@@ -600,7 +618,8 @@ export default function CasesIndex({
                                             search: filters.search,
                                             status: filters.status,
                                             priority: filters.priority,
-                                            department_id: filters.department_id,
+                                            department_id:
+                                                filters.department_id,
                                             assignment: filters.assignment,
                                             sort: filters.sort,
                                         }).flatMap(([key, value]) =>
@@ -619,7 +638,8 @@ export default function CasesIndex({
                         ) : null}
                         <Button
                             asChild
-                            className="h-9 rounded-xl bg-brand text-white hover:bg-brand/90"
+                            variant="outline"
+                            className="h-9 rounded-xl"
                         >
                             <Link
                                 href={`/p/${team.slug}/intake`}
@@ -629,6 +649,16 @@ export default function CasesIndex({
                                 Public intake
                             </Link>
                         </Button>
+                        {permissions.canCreateCases && newCase ? (
+                            <Button
+                                type="button"
+                                className="h-9 rounded-xl bg-brand text-white hover:bg-brand/90"
+                                onClick={() => setCreatingCase(true)}
+                            >
+                                <Plus className="size-4" />
+                                New case
+                            </Button>
+                        ) : null}
                     </div>
                 </div>
 
@@ -870,211 +900,199 @@ export default function CasesIndex({
                                 </DataTableHead>
                             </DataTableHeader>
                             <DataTableBody>
-                                    {cases.data.map((item) => {
-                                        const priorityLabel =
-                                            filterOptions.priorities.find(
-                                                (option) =>
-                                                    option.value ===
-                                                    item.priority,
-                                            )?.label ?? item.priority;
-                                        const caseHref = `/${team.slug}/cases/${item.reference}`;
-                                        const checked = selected.includes(
-                                            item.id,
-                                        );
+                                {cases.data.map((item) => {
+                                    const priorityLabel =
+                                        filterOptions.priorities.find(
+                                            (option) =>
+                                                option.value === item.priority,
+                                        )?.label ?? item.priority;
+                                    const caseHref = `/${team.slug}/cases/${item.reference}`;
+                                    const checked = selected.includes(item.id);
 
-                                        return (
-                                            <DataTableRow
-                                                key={item.id}
-                                                onClick={(event) => {
-                                                    if (
-                                                        (
-                                                            event.target as HTMLElement
-                                                        ).closest(
-                                                            'a,button,input,label,[role=checkbox]',
-                                                        )
-                                                    ) {
-                                                        return;
-                                                    }
-
-                                                    router.visit(caseHref);
-                                                }}
-                                                className={
-                                                    checked
-                                                        ? 'bg-brand/5'
-                                                        : undefined
+                                    return (
+                                        <DataTableRow
+                                            key={item.id}
+                                            onClick={(event) => {
+                                                if (
+                                                    (
+                                                        event.target as HTMLElement
+                                                    ).closest(
+                                                        'a,button,input,label,[role=checkbox]',
+                                                    )
+                                                ) {
+                                                    return;
                                                 }
-                                            >
-                                                <DataTableCell>
-                                                    <Checkbox
-                                                        checked={checked}
-                                                        onCheckedChange={(
-                                                            value,
-                                                        ) =>
-                                                            toggleRow(
-                                                                item.id,
-                                                                value === true,
+
+                                                router.visit(caseHref);
+                                            }}
+                                            className={
+                                                checked
+                                                    ? 'bg-brand/5'
+                                                    : undefined
+                                            }
+                                        >
+                                            <DataTableCell>
+                                                <Checkbox
+                                                    checked={checked}
+                                                    onCheckedChange={(value) =>
+                                                        toggleRow(
+                                                            item.id,
+                                                            value === true,
+                                                        )
+                                                    }
+                                                    aria-label={`Select ${item.reference}`}
+                                                />
+                                            </DataTableCell>
+                                            <DataTableCell>
+                                                <div className="flex items-start gap-3">
+                                                    <span className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-full bg-brand/10 text-xs font-semibold text-brand">
+                                                        {initials(
+                                                            item.patient_name,
+                                                        )}
+                                                    </span>
+                                                    <div className="min-w-0">
+                                                        <div className="flex flex-wrap items-center gap-2">
+                                                            <Link
+                                                                href={caseHref}
+                                                                className="truncate text-left font-semibold text-slate-900 hover:text-brand"
+                                                            >
+                                                                {
+                                                                    item.patient_name
+                                                                }
+                                                            </Link>
+                                                            {item.is_demo ? (
+                                                                <Badge
+                                                                    variant="secondary"
+                                                                    className="rounded-full"
+                                                                >
+                                                                    Demo
+                                                                </Badge>
+                                                            ) : null}
+                                                        </div>
+                                                        <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500">
+                                                            <span className="font-mono text-[11px] text-brand">
+                                                                {item.reference}
+                                                            </span>
+                                                            {(item.country ||
+                                                                item.preferred_language) && (
+                                                                <span className="inline-flex items-center gap-1">
+                                                                    <MapPin className="size-3" />
+                                                                    {[
+                                                                        item.country,
+                                                                        item.preferred_language,
+                                                                    ]
+                                                                        .filter(
+                                                                            Boolean,
+                                                                        )
+                                                                        .join(
+                                                                            ' · ',
+                                                                        )}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </DataTableCell>
+                                            <DataTableCell>
+                                                <span
+                                                    className={cn(
+                                                        'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold',
+                                                        PRIORITY_STYLES[
+                                                            item.priority
+                                                        ] ??
+                                                            PRIORITY_STYLES.normal,
+                                                    )}
+                                                >
+                                                    {(item.priority ===
+                                                        'urgent' ||
+                                                        item.priority ===
+                                                            'high') && (
+                                                        <Flame className="size-3.5" />
+                                                    )}
+                                                    {priorityLabel}
+                                                </span>
+                                            </DataTableCell>
+                                            <DataTableCell>
+                                                <span
+                                                    className={cn(
+                                                        'inline-flex max-w-[180px] truncate rounded-full border px-2.5 py-1 text-xs font-medium',
+                                                        STATUS_STYLES[
+                                                            item.status
+                                                        ] ??
+                                                            'border-slate-200 bg-slate-50 text-slate-600',
+                                                    )}
+                                                >
+                                                    {item.status_label}
+                                                </span>
+                                            </DataTableCell>
+                                            <DataTableCell className="text-slate-700">
+                                                {item.department ?? (
+                                                    <span className="text-slate-400">
+                                                        —
+                                                    </span>
+                                                )}
+                                            </DataTableCell>
+                                            <DataTableCell>
+                                                <div className="space-y-0.5">
+                                                    <div className="text-slate-800">
+                                                        {item.assigned_coordinator ?? (
+                                                            <span className="text-slate-400">
+                                                                No coordinator
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    <div className="text-xs text-slate-500">
+                                                        {item.assigned_doctor ??
+                                                            'No doctor'}
+                                                    </div>
+                                                </div>
+                                            </DataTableCell>
+                                            <DataTableCell className="whitespace-nowrap text-slate-500">
+                                                {formatActivity(
+                                                    item.last_activity_at,
+                                                )}
+                                            </DataTableCell>
+                                            <DataTableCell>
+                                                <div className="flex items-center justify-end gap-1.5">
+                                                    <ActionButton
+                                                        label="Open case"
+                                                        onClick={() =>
+                                                            router.visit(
+                                                                caseHref,
                                                             )
                                                         }
-                                                        aria-label={`Select ${item.reference}`}
-                                                    />
-                                                </DataTableCell>
-                                                <DataTableCell>
-                                                    <div className="flex items-start gap-3">
-                                                        <span className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-full bg-brand/10 text-xs font-semibold text-brand">
-                                                            {initials(
-                                                                item.patient_name,
-                                                            )}
-                                                        </span>
-                                                        <div className="min-w-0">
-                                                            <div className="flex flex-wrap items-center gap-2">
-                                                                <Link
-                                                                    href={
-                                                                        caseHref
-                                                                    }
-                                                                    className="truncate text-left font-semibold text-slate-900 hover:text-brand"
-                                                                >
-                                                                    {
-                                                                        item.patient_name
-                                                                    }
-                                                                </Link>
-                                                                {item.is_demo ? (
-                                                                    <Badge
-                                                                        variant="secondary"
-                                                                        className="rounded-full"
-                                                                    >
-                                                                        Demo
-                                                                    </Badge>
-                                                                ) : null}
-                                                            </div>
-                                                            <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500">
-                                                                <span className="font-mono text-[11px] text-brand">
-                                                                    {
-                                                                        item.reference
-                                                                    }
-                                                                </span>
-                                                                {(item.country ||
-                                                                    item.preferred_language) && (
-                                                                    <span className="inline-flex items-center gap-1">
-                                                                        <MapPin className="size-3" />
-                                                                        {[
-                                                                            item.country,
-                                                                            item.preferred_language,
-                                                                        ]
-                                                                            .filter(
-                                                                                Boolean,
-                                                                            )
-                                                                            .join(
-                                                                                ' · ',
-                                                                            )}
-                                                                    </span>
-                                                                )}
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </DataTableCell>
-                                                <DataTableCell>
-                                                    <span
-                                                        className={cn(
-                                                            'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold',
-                                                            PRIORITY_STYLES[
-                                                                item.priority
-                                                            ] ??
-                                                                PRIORITY_STYLES.normal,
-                                                        )}
                                                     >
-                                                        {(item.priority ===
-                                                            'urgent' ||
-                                                            item.priority ===
-                                                                'high') && (
-                                                            <Flame className="size-3.5" />
-                                                        )}
-                                                        {priorityLabel}
-                                                    </span>
-                                                </DataTableCell>
-                                                <DataTableCell>
-                                                    <span
-                                                        className={cn(
-                                                            'inline-flex max-w-[180px] truncate rounded-full border px-2.5 py-1 text-xs font-medium',
-                                                            STATUS_STYLES[
-                                                                item.status
-                                                            ] ??
-                                                                'border-slate-200 bg-slate-50 text-slate-600',
-                                                        )}
+                                                        <Eye className="size-4" />
+                                                    </ActionButton>
+                                                    <ActionButton
+                                                        label="Copy reference"
+                                                        onClick={() =>
+                                                            copyReference(
+                                                                item.reference,
+                                                            )
+                                                        }
                                                     >
-                                                        {item.status_label}
-                                                    </span>
-                                                </DataTableCell>
-                                                <DataTableCell className="text-slate-700">
-                                                    {item.department ?? (
-                                                        <span className="text-slate-400">
-                                                            —
-                                                        </span>
-                                                    )}
-                                                </DataTableCell>
-                                                <DataTableCell>
-                                                    <div className="space-y-0.5">
-                                                        <div className="text-slate-800">
-                                                            {item.assigned_coordinator ?? (
-                                                                <span className="text-slate-400">
-                                                                    No
-                                                                    coordinator
-                                                                </span>
-                                                            )}
-                                                        </div>
-                                                        <div className="text-xs text-slate-500">
-                                                            {item.assigned_doctor ??
-                                                                'No doctor'}
-                                                        </div>
-                                                    </div>
-                                                </DataTableCell>
-                                                <DataTableCell className="whitespace-nowrap text-slate-500">
-                                                    {formatActivity(
-                                                        item.last_activity_at,
-                                                    )}
-                                                </DataTableCell>
-                                                <DataTableCell>
-                                                    <div className="flex items-center justify-end gap-1.5">
-                                                        <ActionButton
-                                                            label="Open case"
-                                                            onClick={() =>
-                                                                router.visit(
-                                                                    caseHref,
-                                                                )
-                                                            }
-                                                        >
-                                                            <Eye className="size-4" />
-                                                        </ActionButton>
-                                                        <ActionButton
-                                                            label="Copy reference"
-                                                            onClick={() =>
-                                                                copyReference(
-                                                                    item.reference,
-                                                                )
-                                                            }
-                                                        >
-                                                            <Copy className="size-4" />
-                                                        </ActionButton>
-                                                        <ActionButton
-                                                            label="Open in new tab"
-                                                            href={caseHref}
-                                                        >
-                                                            <ArrowUpRight className="size-4" />
-                                                        </ActionButton>
-                                                        <ActionButton
-                                                            label="Manage"
-                                                            onClick={() =>
-                                                                openManageCase(
-                                                                    item,
-                                                                )
-                                                            }
-                                                        >
-                                                            <PanelRight className="size-4" />
-                                                        </ActionButton>
-                                                    </div>
-                                                </DataTableCell>
-                                            </DataTableRow>
-                                        );
-                                    })}
+                                                        <Copy className="size-4" />
+                                                    </ActionButton>
+                                                    <ActionButton
+                                                        label="Open in new tab"
+                                                        href={caseHref}
+                                                    >
+                                                        <ArrowUpRight className="size-4" />
+                                                    </ActionButton>
+                                                    <ActionButton
+                                                        label="Manage"
+                                                        onClick={() =>
+                                                            openManageCase(item)
+                                                        }
+                                                    >
+                                                        <PanelRight className="size-4" />
+                                                    </ActionButton>
+                                                </div>
+                                            </DataTableCell>
+                                        </DataTableRow>
+                                    );
+                                })}
                             </DataTableBody>
                         </DataTable>
 
@@ -1251,8 +1269,8 @@ export default function CasesIndex({
                                     <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-600">
                                         <FileText className="size-3.5" />
                                         {selectedCase.documents_count ?? 0}{' '}
-                                        {(selectedCase.documents_count ??
-                                            0) === 1
+                                        {(selectedCase.documents_count ?? 0) ===
+                                        1
                                             ? 'document'
                                             : 'documents'}
                                     </span>
@@ -1263,7 +1281,7 @@ export default function CasesIndex({
                                         </span>
                                     ) : null}
                                     {selectedCase.preferred_language ? (
-                                        <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium uppercase text-slate-600">
+                                        <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-600 uppercase">
                                             <Languages className="size-3.5" />
                                             {selectedCase.preferred_language}
                                         </span>
@@ -1417,9 +1435,7 @@ export default function CasesIndex({
                                                               )
                                                             : null,
                                                     doctor_id: data.doctor_id
-                                                        ? Number(
-                                                              data.doctor_id,
-                                                          )
+                                                        ? Number(data.doctor_id)
                                                         : null,
                                                     clear_coordinator:
                                                         !data.coordinator_id,

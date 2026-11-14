@@ -64,6 +64,10 @@ class PatientDirectoryController extends Controller
                     'url' => route('organizations.cases.show', ['current_team' => $current_team->slug, 'case' => $case->reference]),
                 ])->values(),
                 'last_activity_at' => $cases->first()?->last_activity_at?->toIso8601String(),
+                'profile_url' => route('organizations.patients.show', ['current_team' => $current_team->slug, 'patient' => $patient->uuid]),
+                'messages_url' => $cases->first() !== null
+                    ? route('organizations.cases.show', ['current_team' => $current_team->slug, 'case' => $cases->first()->reference, 'tab' => 'communications'])
+                    : null,
             ];
         });
 

@@ -52,7 +52,14 @@ class UpdatePatientFollowUp
                 'due_at' => $data['due_at'] ?? $locked->due_at,
                 'assigned_user_id' => array_key_exists('assigned_user_id', $data) ? $data['assigned_user_id'] : $locked->assigned_user_id,
                 'status' => isset($data['status']) ? FollowUpStatus::from($data['status']) : $locked->status,
-            ])->save();
+            ]);
+
+            if ($locked->isDirty('due_at')) {
+                // A new date gets its own reminder (and patient reminder draft) when it comes round.
+                $locked->reminded_at = null;
+            }
+
+            $locked->save();
 
             $case = $locked->case()->lockForUpdate()->firstOrFail();
             $case->forceFill(['last_activity_at' => now()])->save();

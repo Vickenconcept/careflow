@@ -1,5 +1,14 @@
 import { Head, Link, router } from '@inertiajs/react';
-import { FolderOpen, Languages, Mail, MapPin, Phone, Search, Users } from 'lucide-react';
+import {
+    FolderOpen,
+    Languages,
+    MapPin,
+    MessageSquare,
+    Phone,
+    Search,
+    UserRound,
+    Users,
+} from 'lucide-react';
 import { useEffect, useState } from 'react';
 import {
     DataTable,
@@ -27,6 +36,8 @@ type PatientRow = {
     case_count: number;
     cases: Array<{ reference: string; status_label: string; url: string }>;
     last_activity_at: string | null;
+    profile_url: string;
+    messages_url: string | null;
 };
 
 type Props = {
@@ -131,9 +142,14 @@ export default function Patients({ team, patients, search }: Props) {
                                                         .toUpperCase()}
                                                 </span>
                                                 <div className="min-w-0">
-                                                    <p className="truncate font-semibold text-slate-900">
+                                                    <Link
+                                                        href={
+                                                            patient.profile_url
+                                                        }
+                                                        className="block truncate font-semibold text-slate-900 hover:text-brand hover:underline"
+                                                    >
                                                         {patient.name}
-                                                    </p>
+                                                    </Link>
                                                     <p className="truncate text-xs text-slate-500">
                                                         {patient.email}
                                                         {patient.phone
@@ -183,7 +199,8 @@ export default function Patients({ team, patients, search }: Props) {
                                                     <li className="text-xs text-slate-500">
                                                         +
                                                         {patient.case_count -
-                                                            patient.cases.length}{' '}
+                                                            patient.cases
+                                                                .length}{' '}
                                                         more
                                                     </li>
                                                 ) : null}
@@ -207,9 +224,20 @@ export default function Patients({ team, patients, search }: Props) {
                                                     showLabel
                                                 />
                                                 <RowAction
-                                                    label="Email patient"
-                                                    icon={Mail}
-                                                    nativeHref={`mailto:${patient.email}`}
+                                                    label="Patient profile"
+                                                    icon={UserRound}
+                                                    href={patient.profile_url}
+                                                />
+                                                <RowAction
+                                                    label="Message patient"
+                                                    icon={MessageSquare}
+                                                    href={
+                                                        patient.messages_url ??
+                                                        undefined
+                                                    }
+                                                    disabled={
+                                                        !patient.messages_url
+                                                    }
                                                 />
                                                 <RowAction
                                                     label="Call patient"
@@ -226,7 +254,8 @@ export default function Patients({ team, patients, search }: Props) {
                                     </DataTableRow>
                                 ))}
                             </DataTableBody>
-                        </DataTable>                        <PaginationLinks links={patients.links} />
+                        </DataTable>
+                        <PaginationLinks links={patients.links} />
                     </DataTableCard>
                 )}
             </div>

@@ -5,12 +5,15 @@ namespace App\Data\Patients;
 use App\Enums\DocumentCategory;
 use App\Enums\PatientGender;
 use App\Models\Team;
+use App\Models\User;
 use Illuminate\Http\UploadedFile;
 
 readonly class IntakeSubmissionData
 {
     /**
      * @param  array<int, array{file: UploadedFile, category: DocumentCategory}>  $documents
+     * @param  User|null  $recordedBy  The staff member who entered the enquiry (phone, email, walk-in); null for the public portal.
+     * @param  bool  $emailPatient  Whether the patient is emailed a confirmation with a link to their case page.
      */
     public function __construct(
         public Team $team,
@@ -36,6 +39,8 @@ readonly class IntakeSubmissionData
         public array $documents,
         public ?string $sourceIp,
         public ?string $userAgent,
+        public ?User $recordedBy = null,
+        public bool $emailPatient = true,
     ) {}
 
     /**
@@ -50,6 +55,8 @@ readonly class IntakeSubmissionData
         array $categories,
         ?string $sourceIp,
         ?string $userAgent,
+        ?User $recordedBy = null,
+        bool $emailPatient = true,
     ): self {
         $documents = [];
 
@@ -90,6 +97,8 @@ readonly class IntakeSubmissionData
             documents: $documents,
             sourceIp: $sourceIp,
             userAgent: $userAgent,
+            recordedBy: $recordedBy,
+            emailPatient: $emailPatient,
         );
     }
 }
